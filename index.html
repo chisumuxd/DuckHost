@@ -527,7 +527,7 @@
       FORM_FIELDS.forEach(f=>{
         const g=document.createElement('div'); g.className='form-group';
         const label=document.createElement('label'); label.textContent=f.header;
-        if(f.yearHint){ const h=document.createElement('span'); h.className='hint-red'; h.textContent='*ใส่ปีเป็น 2026'; label.appendChild(h); }
+        if(f.yearHint){ const h=document.createElement('span'); h.className='hint-red'; h.textContent='*รูปแบบปี 20XX'; label.appendChild(h); }
         let input;
         const value=row?(row[f.key]||''):'';
         const fieldOpts = getOptionsFor(f.key);
