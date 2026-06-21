@@ -107,7 +107,8 @@
             <button id="manageUsersBtn" class="btn-gray" style="display:none;" onclick="openUserModal()">จัดการผู้ใช้</button>
             <button id="auditBtn" class="btn-gray" style="display:none;" onclick="openAuditModal()">ประวัติ</button>
             <button id="addBtn" class="btn-blue" onclick="openAddModal()">+ เพิ่มข้อมูล</button>
-            <button class="btn-gray" onclick="loadAccounts()">รีเฟรช</button>
+            <button class="btn-yellow" onclick="openGiftCard()">🎁 เบิก gift card</button>
+            <button class="btn-blue" onclick="loadAccounts()">รีเฟรช</button>
             <button class="btn-gray" onclick="doLogout()">ออกจากระบบ</button>
           </div>
         </div>
@@ -219,7 +220,12 @@
 
     const DROPDOWN_OPTIONS = { status: ['เติมโค้ดแล้ว', 'ยังไม่ได้เติม', 'ติดต่อไม่ได้'] };
     let machineOptions = [];
-
+    
+    const GIFT_CARD_URL = 'https://ใส่ลิงก์ที่ต้องการตรงนี้';
+    function openGiftCard(){
+      window.open(GIFT_CARD_URL, 'https://chisumuxd.github.io/DuckGiftCard/');   // เปิดแท็บใหม่
+    }
+    
     function getOptionsFor(key){
       if(key === 'machine') return (machineOptions && machineOptions.length) ? machineOptions : null;
       return DROPDOWN_OPTIONS[key] || null;
