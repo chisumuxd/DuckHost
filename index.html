@@ -562,6 +562,14 @@
     async function saveData(){
       hideModalAlert();
       const payload=getFormPayload();
+
+      for(const k of USE_KEYS){
+        if(!isValidUseValue(payload[k])){
+          const label = (FORM_FIELDS.find(f=>f.key===k)||{}).header || k;
+          showModalAlert('ช่อง '+label+' ต้องมีวันที่ต่อท้ายชื่อ เช่น "bestfortest 21/6/69"\n(ถ้าจะเว้นว่าง ให้ลบให้ว่าง หรือใส่คำว่า "ว่าง")');
+          return;
+        }
+      }
       const btn=document.getElementById('saveBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก...';
       let error;
       if(currentMode==='add'){
@@ -724,6 +732,12 @@
         if(newValue===null) return;
         newValue = newValue.trim();
       }
+      
+        if(USE_KEYS.includes(key) && !isValidUseValue(newValue)){
+        showPopup('ใส่วันที่ด้วย', 'ช่อง '+header+' ต้องมีวันที่ต่อท้ายชื่อ\nเช่น "bestfortest 21/6/69"\n\n(ถ้าต้องการเว้นว่าง ให้ลบให้ว่าง หรือใส่คำว่า "ว่าง")', 'error');
+        return;
+      } 
+      
       if(String(newValue)===String(oldValue).trim()) return;
       const payload={}; payload[key]=newValue;
       const oldRow = accountsRows.find(r=>r.id===row.id);
@@ -756,6 +770,13 @@
     function isEmptyUse(val){ const t=String(val||'').trim(); return t===''||t==='ว่าง'; }
     function rowHasEmptyHB(row){ return USE_KEYS.some(k => isEmptyUse(row[k])); }
 
+    // ตรวจช่อง Use: ถ้ามีชื่อ ต้องมีวันที่ท้าย — คืน true ถ้าผ่าน
+    function isValidUseValue(val){
+      const t = String(val||'').trim();
+      if(t === '' || t === 'ว่าง') return true;       // เว้นว่าง/ว่าง = ผ่าน
+      return extractDate(t) !== null;                  // มีข้อความ ต้องมีวันที่ที่อ่านได้
+    }
+    
     function effectiveStatus(row){
       const cur = String(row.status||'').trim();
       const d = extractDate(row.expire_date);
