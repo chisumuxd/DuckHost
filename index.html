@@ -449,7 +449,7 @@
         if(f.width){ th.style.width=f.width+'px'; th.style.minWidth=f.width+'px'; th.style.maxWidth=f.width+'px'; }
         hr.appendChild(th);
       });
-      const thAct=document.createElement('th'); thAct.textContent='จัดการ'; hr.appendChild(thAct);
+      const thAct=document.createElement('th'); thAct.textContent='จัดการ'; thAct.style.width='80px'; thAct.style.minWidth='80px'; thAct.style.maxWidth='80px'; hr.appendChild(thAct);
       thead.appendChild(hr);
 
       if(rows.length===0){ setStatus('ไม่พบข้อมูลที่ตรงกับคำค้นหา'); return; }
@@ -486,6 +486,7 @@
           tr.appendChild(td);
         });
         const tdAct=document.createElement('td'); tdAct.className='actions';
+        tdAct.style.width='80px'; tdAct.style.minWidth='80px'; tdAct.style.maxWidth='80px';
         if(canEdit()){
           const b=document.createElement('button'); b.className='btn-yellow'; b.textContent='แก้ไข';
           b.onclick=()=>openEditModal(row); tdAct.appendChild(b);
