@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; font-family: Arial, "Sarabun", sans-serif; }
+    body { margin: 0; background: #f4f6f8; color: #222; }
+    .container { width: 96vw; margin: 0 auto; padding: 18px; }
+    .card { background: #fff; border-radius: 16px; padding: 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); margin-bottom: 16px; }
+    h1 { margin: 0 0 8px; font-size: 22px; color: #0f5132; }
+    input, select { width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 10px; font-size: 14px; background:#fff; }
+    input:focus, select:focus { outline: none; border-color: #198754; box-shadow: 0 0 0 3px rgba(25,135,84,0.15); }
+    button { border: none; border-radius: 10px; padding: 10px 15px; cursor: pointer; font-size: 14px; font-weight: 600; }
+    .btn-primary { background: #198754; color: white; }
+    .btn-blue { background: #0d6efd; color: white; }
+    .btn-red { background: #dc3545; color: white; }
+    .btn-gray { background: #6c757d; color: white; }
+    .btn-yellow { background:#ffc107; color:#222; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .login-wrap { max-width: 360px; margin: 12vh auto 0; }
+    .login-wrap .field { margin-bottom: 12px; }
+    .login-wrap label { display:block; font-size:13px; font-weight:600; margin-bottom:5px; }
+    .login-error { display:none; background:#f8d7da; color:#842029; padding:10px 12px; border-radius:10px; margin-bottom:12px; font-size:14px; white-space:pre-line; }
+    .login-error.show { display:block; }
+
+    .user-badge { display:inline-block; padding:5px 10px; border-radius:999px; background:#e9f7ef; color:#0f5132; font-weight:700; font-size:13px; }
+    .role-badge { display:inline-block; padding:3px 8px; border-radius:999px; background:#e7f1ff; color:#084298; font-size:12px; font-weight:700; }
+    .live-dot { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#0f5132; }
+    .live-dot::before { content:''; width:9px; height:9px; border-radius:50%; background:#bbb; display:inline-block; }
+    .live-dot.on::before { background:#198754; box-shadow:0 0 0 3px rgba(25,135,84,0.2); }
+    .live-dot::after { content:'realtime'; }
+
+    .topbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+    .topbar-left { display:flex; align-items:center; gap:10px; flex-wrap:wrap; flex:1; min-width:200px; }
+    .topbar-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+
+    .search-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding-top:14px; border-top:1px solid #eef0f2; }
+    .search-input { flex:1; min-width:220px; }
+    .filter-group { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .chk-label { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:700; white-space:nowrap; color:#14532d; background:#eefaf2; padding:9px 12px; border-radius:10px; border:1px solid #cfe8d8; cursor:pointer; user-select:none; }
+    .chk-label input { width:auto; margin:0; transform:scale(1.1); }
+    .search-row input[type="date"] { width:auto; min-width:140px; }
+
+    .table-wrap { overflow:auto; border:1px solid #b7b7b7; background:#fff; max-height:74vh; border-radius:6px; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; min-width:1400px; font-size:12px; }
+    th, td {padding:3px 8px; border:1px solid #d4d4d4;vertical-align:middle; white-space:nowrap; line-height:1.4;height:42px; max-height:42px;overflow:hidden; text-overflow:ellipsis;}
+    th { background:#0f9d58; color:#fff; font-weight:700; position:sticky; top:0; z-index:2; text-align:center; border-color:#0b8043; }
+    tbody tr:nth-child(even) { background:#f8f9fa; }
+    tbody tr:hover { background:#e8f0fe; }
+    td.actions { white-space:nowrap; text-align:center; }
+    td.actions button { padding:3px 8px; font-size:11px; }
+    td[style*="background"] { font-weight:600; }
+    td.use-cell { white-space:normal !important; word-break:break-word; }
+    td.machine-cell { white-space:normal !important; word-break:break-word; }
+    .status-msg { margin-top:10px; font-size:13px; color:#666; min-height:18px; }
+
+    .modal-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:50; padding:20px; overflow-y:auto; }
+    .modal { background:#fff; max-width:1000px; margin:30px auto; border-radius:16px; padding:22px; box-shadow:0 14px 36px rgba(0,0,0,0.22); }
+    .modal-header { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px; }
+    .modal-title { font-size:20px; font-weight:700; color:#0f5132; }
+    .modal-alert { display:none; background:#f8d7da; color:#842029; border:1px solid #f1aeb5; padding:12px 14px; border-radius:12px; margin-bottom:14px; font-size:14px; white-space:pre-line; font-weight:600; }
+    .modal-alert.show { display:block; }
+    .form-grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; }
+    .form-group label { display:block; font-size:13px; font-weight:600; margin-bottom:5px; }
+    .hint-red { color:#d93025; font-weight:700; font-size:12px; margin-left:6px; }
+    .modal-footer { display:flex; justify-content:flex-end; gap:10px; margin-top:18px; flex-wrap:wrap; }
+
+    .popup-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:99; padding:20px; }
+    .popup-box { background:#fff; max-width:400px; margin:18vh auto 0; border-radius:18px; padding:24px; text-align:center; box-shadow:0 18px 45px rgba(0,0,0,0.28); }
+    .popup-icon { width:54px; height:54px; margin:0 auto 14px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:800; }
+    .popup-icon.success { background:#d1e7dd; color:#0f5132; }
+    .popup-icon.error { background:#f8d7da; color:#842029; }
+    .popup-title { font-size:19px; font-weight:800; margin-bottom:8px; }
+    .popup-msg { font-size:14px; color:#334155; white-space:pre-line; margin-bottom:18px; line-height:1.6; }
+    @media (max-width:700px){ .form-grid{ grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="loginView" class="card login-wrap" style="display:none;">
+      <h1>เข้าสู่ระบบ</h1>
+      <div id="loginError" class="login-error"></div>
+      <div class="field"><label>ชื่อผู้ใช้ (Username)</label>
+        <input id="loginUsername" type="text" placeholder="admin" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div class="field"><label>รหัสผ่าน</label>
+        <input id="loginPassword" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <button id="loginBtn" class="btn-primary" style="width:100%;" onclick="doLogin()">เข้าสู่ระบบ</button>
+    </div>
+
+    <div id="appView" style="display:none;">
+      <div class="card">
+        <div class="topbar">
+          <div class="topbar-left">
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <h1 id="pageTitle" style="margin:0; font-size:21px;">หัวบ้าน Duck Duck Premium</h1>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span id="userBadge" class="user-badge"></span>
+                <span id="roleBadge" class="role-badge"></span>
+                <span id="liveDot" class="live-dot"></span>
+              </div>
+            </div>
+          </div>
+          <div class="topbar-actions">
+            <button id="manageUsersBtn" class="btn-gray" style="display:none;" onclick="openUserModal()">จัดการผู้ใช้</button>
+            <button id="auditBtn" class="btn-gray" style="display:none;" onclick="openAuditModal()">ประวัติ</button>
+            <button id="addBtn" class="btn-blue" onclick="openAddModal()">+ เพิ่มข้อมูล</button>
+            <button class="btn-gray" onclick="loadAccounts()">รีเฟรช</button>
+            <button class="btn-gray" onclick="doLogout()">ออกจากระบบ</button>
+          </div>
+        </div>
+
+        <div class="search-row">
+          <div class="filter-group">
+            <input id="searchDateInput" type="date" onchange="applySearch()" title="ค้นหาตามวันหมดอายุ">
+            <button id="expiredBtn" class="btn-red" onclick="toggleExpiredPage()">หมดอายุแล้ว</button>
+          </div>
+          <input id="searchInput" class="search-input" type="text" placeholder="ค้นหาทั่วไป เช่น อีเมล, เครื่อง, เบอร์" oninput="applySearch()" onkeydown="if(event.key==='Enter')applySearch()">
+          <div class="filter-group">
+            <label class="chk-label"><input id="chkEmptyHB" type="checkbox" onchange="applySearch()">หัวบ้านว่าง</label>
+            <label class="chk-label"><input id="chkUseDate" type="checkbox" onchange="applySearch()">ค้นจากวันที่ (Use 1-5)</label>
+            <label class="chk-label"><input id="chkMachine" type="checkbox" onchange="applySearch()">ค้นจากเครื่อง</label>
+            <button class="btn-gray" onclick="clearSearch()">ล้างผลค้นหา</button>
+          </div>
+        </div>
+        <div id="statusMsg" class="status-msg"></div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalBackdrop" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="modalTitle">แก้ไขข้อมูล</div>
+        <button class="btn-red" onclick="closeModal()">ปิด</button>
+      </div>
+      <div id="modalAlert" class="modal-alert"></div>
+      <div id="formGrid" class="form-grid"></div>
+      <div class="modal-footer">
+        <button id="deleteBtn" class="btn-red" onclick="deleteCurrentRow()" style="display:none; margin-right:auto;">ลบ</button>
+        <button class="btn-gray" onclick="closeModal()">ยกเลิก</button>
+        <button id="saveBtn" class="btn-primary" onclick="saveData()">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="userModalBackdrop" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">จัดการผู้ใช้</div>
+        <button class="btn-red" onclick="closeUserModal()">ปิด</button>
+      </div>
+      <div id="userModalAlert" class="modal-alert"></div>
+      <div style="font-size:13px; color:#666; margin-bottom:12px; line-height:1.6;">
+        ADMIN = จัดการผู้ใช้ + แก้ไขข้อมูล &nbsp;|&nbsp; EDITOR = แก้ไขข้อมูล &nbsp;|&nbsp; VIEWER = ดูอย่างเดียว<br>
+        <b>หมายเหตุ:</b> การสร้างบัญชีใหม่/ลบบัญชี ทำที่ Supabase Dashboard → Authentication
+      </div>
+      <div class="form-grid" style="grid-template-columns:repeat(4,1fr); align-items:end;">
+        <div class="form-group"><label>Username</label><input id="uUsername" type="text" placeholder="เช่น staff1"></div>
+        <div class="form-group"><label>ชื่อ</label><input id="uName" type="text"></div>
+        <div class="form-group"><label>บทบาท</label>
+          <select id="uRole"><option value="EDITOR">EDITOR</option><option value="VIEWER">VIEWER</option><option value="ADMIN">ADMIN</option></select></div>
+        <div class="form-group"><label>สถานะ</label>
+          <select id="uStatus"><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></div>
+      </div>
+      <div style="margin-top:12px; display:flex; gap:10px;">
+        <button id="uSaveBtn" class="btn-primary" onclick="saveUser()">บันทึก</button>
+        <button class="btn-gray" onclick="resetUserForm()">ล้างฟอร์ม</button>
+        <span style="flex:1;"></span>
+        <button class="btn-gray" onclick="loadUsers()">รีเฟรชรายชื่อ</button>
+      </div>
+      <div class="table-wrap" style="margin-top:14px; max-height:45vh;">
+        <table style="min-width:700px;">
+          <thead><tr><th>Username</th><th>ชื่อ</th><th>บทบาท</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+          <tbody id="userTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="auditModalBackdrop" class="modal-backdrop">
+    <div class="modal" style="max-width:1100px;">
+      <div class="modal-header">
+        <div class="modal-title">ประวัติการใช้งาน (Audit Log)</div>
+        <button class="btn-red" onclick="document.getElementById('auditModalBackdrop').style.display='none'">ปิด</button>
+      </div>
+      <div style="margin-bottom:10px;"><button class="btn-gray" onclick="loadAudit()">รีเฟรช</button> <span style="font-size:12px;color:#666;">แสดง 200 รายการล่าสุด</span></div>
+      <div class="table-wrap" style="max-height:60vh;">
+        <table style="min-width:900px;">
+          <thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>การกระทำ</th><th>ID</th><th>คอลัมน์</th><th>ค่าเดิม</th><th>ค่าใหม่</th></tr></thead>
+          <tbody id="auditTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="popupBackdrop" class="popup-backdrop">
+    <div class="popup-box">
+      <div id="popupIcon" class="popup-icon success">✓</div>
+      <div id="popupTitle" class="popup-title">สำเร็จ</div>
+      <div id="popupMsg" class="popup-msg"></div>
+      <button class="btn-primary" style="min-width:120px;" onclick="closePopup()">ตกลง</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL = 'https://voiimqrtloloonpehhwg.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvaWltcXJ0bG9sb29ucGVoaHdnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5MDkzNzcsImV4cCI6MjA5NzQ4NTM3N30.3ARGoW1KHIcLmvkrAwDd4wEAzuJ0HlKadCNsq3eBVxU';
+    const LOGIN_DOMAIN = 'duck.local';
+
+    const DROPDOWN_OPTIONS = { status: ['เติมโค้ดแล้ว', 'ยังไม่ได้เติม', 'ติดต่อไม่ได้'] };
+    let machineOptions = [];
+
+    function getOptionsFor(key){
+      if(key === 'machine') return (machineOptions && machineOptions.length) ? machineOptions : null;
+      return DROPDOWN_OPTIONS[key] || null;
+    }
+
+    const FORM_FIELDS = [
+      { key:'email', header:'Email' },
+      { key:'pass', header:'Pass' },
+      { key:'use1', header:'Use 1' },
+      { key:'use2', header:'Use 2' },
+      { key:'use3', header:'Use 3' },
+      { key:'use4', header:'Use 4' },
+      { key:'use5', header:'Use 5' },
+      { key:'machine', header:'เครื่อง' },
+      { key:'contact', header:'ช่องทางติดต่อ' },
+      { key:'expire_date', header:'หมดอายุ', yearHint:true },
+      { key:'status', header:'สถานะ' },
+      { key:'credit', header:'เครดิต' },
+      { key:'fill_date', header:'เติมวันที่', yearHint:true },
+      { key:'apple_email', header:'เมล Apple ID' },
+      { key:'apple_pass', header:'Pass Apple ID' },
+      { key:'mail_birth', header:'วันเกิดเมล' },
+      { key:'ios_verify', header:'เบอร์ยืนยัน IOS' },
+      { key:'phone_owner', header:'เจ้าของเบอร์' },
+      { key:'note', header:'หมายเหตุ' }
+    ];
+
+    const DISPLAY_FIELDS = [
+      { key:'email', header:'Email', width:240},
+      { key:'pass', header:'Pass', width:180},
+      { key:'use1', header:'Use 1', dateUser:true, width:140},
+      { key:'use2', header:'Use 2', dateUser:true, width:140},
+      { key:'use3', header:'Use 3', dateUser:true, width:140},
+      { key:'use4', header:'Use 4', dateUser:true, width:140},
+      { key:'use5', header:'Use 5', dateUser:true, width:140},
+      { key:'machine', header:'เครื่อง', width:110},
+      { key:'contact', header:'ช่องทางติดต่อ', width:120},
+      { key:'expire_date', header:'หมดอายุ', dateExpire:true, width:90},
+      { key:'status', header:'สถานะ', width:100},
+      { key:'credit', header:'เครดิต', width:60},
+      { key:'fill_date', header:'เติมวันที่', width:100},
+      { key:'apple_email', header:'เมล Apple ID', width:240},
+      { key:'apple_pass', header:'Pass Apple ID', width:130},
+      { key:'ios_verify', header:'เบอร์ยืนยัน IOS', width:120},
+      { key:'phone_owner', header:'เจ้าของเบอร์', width:100},
+      { key:'note', header:'หมายเหตุ', width:200}
+    ];
+
+    const USE_KEYS = ['use1','use2','use3','use4','use5'];
+
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    let currentUser = null, accountsRows = [], realtimeChannel = null, isExpiredPage = false;
+    let currentMode = 'edit', editingId = null, popupCb = null;
+
+    window.onload = async function () {
+      const { data } = await sb.auth.getSession();
+      if (data && data.session) await afterLogin(data.session.user); else showLogin();
+    };
+
+    function showLogin(){ document.getElementById('appView').style.display='none'; document.getElementById('loginView').style.display='block'; }
+    function showApp(){ document.getElementById('loginView').style.display='none'; document.getElementById('appView').style.display='block'; }
+    function setLoginError(m){ const el=document.getElementById('loginError'); if(!m){el.className='login-error';el.textContent='';return;} el.textContent=m; el.className='login-error show'; }
+    function setStatus(m){ document.getElementById('statusMsg').textContent = m || ''; }
+    function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function showPopup(title, msg, type, cb){
+      document.getElementById('popupIcon').className = 'popup-icon ' + (type==='error'?'error':'success');
+      document.getElementById('popupIcon').textContent = type==='error'?'!':'✓';
+      document.getElementById('popupTitle').textContent = title;
+      document.getElementById('popupMsg').textContent = msg || '';
+      popupCb = typeof cb==='function'?cb:null;
+      document.getElementById('popupBackdrop').style.display='block';
+    }
+    function closePopup(){ document.getElementById('popupBackdrop').style.display='none'; if(popupCb){const c=popupCb;popupCb=null;c();} }
+
+    function pickFromList(title, options, currentValue){
+      return new Promise(resolve=>{
+        const backdrop=document.createElement('div');
+        backdrop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
+        const box=document.createElement('div');
+        box.style.cssText='background:#fff;max-width:380px;width:100%;margin:12vh auto 0;border-radius:18px;padding:20px;box-shadow:0 18px 45px rgba(0,0,0,0.28);';
+        const h=document.createElement('div'); h.textContent=title;
+        h.style.cssText='font-size:17px;font-weight:800;color:#0f5132;margin-bottom:14px;'; box.appendChild(h);
+        const cur=String(currentValue||'').trim();
+        options.forEach(opt=>{
+          const b=document.createElement('button'); b.textContent=opt;
+          const isCur=(String(opt).trim()===cur);
+          b.style.cssText='display:block;width:100%;text-align:left;margin-bottom:8px;padding:12px 14px;border-radius:10px;border:1px solid '+(isCur?'#198754':'#ccc')+';background:'+(isCur?'#eefaf2':'#fff')+';font-size:15px;font-weight:'+(isCur?'700':'500')+';cursor:pointer;color:#222;';
+          b.onclick=()=>{ document.body.removeChild(backdrop); resolve(opt); };
+          box.appendChild(b);
+        });
+        const footer=document.createElement('div'); footer.style.cssText='display:flex;gap:10px;margin-top:6px;';
+        const clearBtn=document.createElement('button'); clearBtn.textContent='ลบค่า (เว้นว่าง)';
+        clearBtn.style.cssText='flex:1;padding:11px;border-radius:10px;border:none;background:#ffc107;color:#222;font-weight:700;cursor:pointer;';
+        clearBtn.onclick=()=>{ document.body.removeChild(backdrop); resolve(''); };
+        const cancelBtn=document.createElement('button'); cancelBtn.textContent='ยกเลิก';
+        cancelBtn.style.cssText='flex:1;padding:11px;border-radius:10px;border:none;background:#6c757d;color:#fff;font-weight:700;cursor:pointer;';
+        cancelBtn.onclick=()=>{ document.body.removeChild(backdrop); resolve(null); };
+        footer.appendChild(clearBtn); footer.appendChild(cancelBtn); box.appendChild(footer);
+        backdrop.appendChild(box);
+        backdrop.onclick=(e)=>{ if(e.target===backdrop){ document.body.removeChild(backdrop); resolve(null); } };
+        document.body.appendChild(backdrop);
+      });
+    }
+
+    async function doLogin(){
+      setLoginError('');
+      const u=document.getElementById('loginUsername').value.trim();
+      const p=document.getElementById('loginPassword').value;
+      if(!u||!p){ setLoginError('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน'); return; }
+      const btn=document.getElementById('loginBtn'); btn.disabled=true; btn.textContent='กำลังเข้าสู่ระบบ...';
+      const email=u.includes('@')?u:(u+'@'+LOGIN_DOMAIN);
+      const { data, error }=await sb.auth.signInWithPassword({email,password:p});
+      btn.disabled=false; btn.textContent='เข้าสู่ระบบ';
+      if(error){ setLoginError('เข้าสู่ระบบไม่สำเร็จ\nชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'); return; }
+      await afterLogin(data.user);
+    }
+
+    async function afterLogin(authUser){
+      const { data:profile, error }=await sb.from('user_profiles').select('id,username,name,role,status').eq('id',authUser.id).single();
+      if(error||!profile){ setLoginError('บัญชีนี้ยังไม่ได้ตั้งค่าสิทธิ์\nกรุณาติดต่อผู้ดูแล'); await sb.auth.signOut(); showLogin(); return; }
+      if(profile.status!=='ACTIVE'){ setLoginError('บัญชีนี้ถูกปิดการใช้งาน'); await sb.auth.signOut(); showLogin(); return; }
+      currentUser=profile;
+      document.getElementById('userBadge').textContent='ผู้ใช้: '+profile.username;
+      document.getElementById('roleBadge').textContent=profile.role;
+      document.getElementById('addBtn').style.display = canEdit() ? 'inline-block' : 'none';
+      document.getElementById('manageUsersBtn').style.display = (currentUser.role==='ADMIN') ? 'inline-block' : 'none';
+      document.getElementById('auditBtn').style.display = (currentUser.role==='ADMIN') ? 'inline-block' : 'none';
+      await loadMachineOptions();
+      showApp(); await loadAccounts(); startRealtime();
+    }
+    function canEdit(){ return currentUser && (currentUser.role==='ADMIN' || currentUser.role==='EDITOR'); }
+    function isAdmin(){ return currentUser && currentUser.role==='ADMIN'; }
+
+    async function doLogout(){ stopRealtime(); await sb.auth.signOut(); currentUser=null; accountsRows=[];
+      document.getElementById('loginUsername').value=''; document.getElementById('loginPassword').value=''; showLogin(); }
+
+    async function loadAccounts(){
+      setStatus('กำลังโหลดข้อมูล...');
+      const PAGE=1000; let from=0; let all=[];
+      while(true){
+        const { data, error } = await sb.from('accounts').select('*').order('id',{ascending:true}).range(from, from+PAGE-1);
+        if(error){ setStatus('โหลดข้อมูลไม่สำเร็จ: '+error.message); return; }
+        all = all.concat(data||[]);
+        if(!data || data.length < PAGE) break;
+        from += PAGE; if(from > 100000) break;
+      }
+      accountsRows = all;
+      applySearch();
+      setStatus('โหลดข้อมูลแล้ว '+accountsRows.length+' แถว');
+      syncExpiredStatus();
+    }
+
+    async function loadMachineOptions(){
+      const { data, error } = await sb.from('user_profiles').select('name').order('name',{ascending:true});
+      if(error){ machineOptions=[]; return; }
+      const set=new Set();
+      (data||[]).forEach(u=>{ const n=String(u.name||'').trim(); if(n) set.add(n); });
+      machineOptions = Array.from(set);
+    }
+
+    function applySearch(){
+      const keyword=document.getElementById('searchInput').value.trim().toLowerCase();
+      const chkMachine=document.getElementById('chkMachine').checked;
+      const chkUseDate=document.getElementById('chkUseDate').checked;
+      const chkEmptyHB=document.getElementById('chkEmptyHB').checked;
+      const dateStr=document.getElementById('searchDateInput').value;
+      let selectedDate=null; if(dateStr){const p=dateStr.split('-'); selectedDate=new Date(+p[0],+p[1]-1,+p[2]);}
+      const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+      const keywords=keyword?keyword.split(/\s+/).filter(Boolean):[];
+
+      const result=accountsRows.filter(row=>{
+        if(keywords.length>0){
+          const ok=keywords.every(w=>{
+            if(chkUseDate) return useMatchDate(row,w);
+            if(chkMachine) return String(row.machine||'').toLowerCase().includes(w);
+            return rowSearchText(row).includes(w);
+          });
+          if(!ok) return false;
+        }
+        if(isExpiredPage){ const d=extractDate(row.expire_date); if(!d||d.getTime()>today.getTime()) return false; }
+        if(selectedDate){ const d=extractDate(row.expire_date); if(!d||d.getTime()!==selectedDate.getTime()) return false; }
+        if(chkEmptyHB && !rowHasEmptyHB(row)) return false;
+        return true;
+      });
+      if(isExpiredPage) result.sort((a,b)=>{const da=extractDate(a.expire_date),db=extractDate(b.expire_date);return (da?da.getTime():0)-(db?db.getTime():0);});
+      renderTable(result,{chkUseDate,keyword});
+    }
+
+    function rowSearchText(row){ return FORM_FIELDS.map(f=>row[f.key]||'').join(' ').toLowerCase(); }
+    function useMatchDate(row,keyword){
+      const target=extractDate(keyword);
+      for(const k of USE_KEYS){ const text=String(row[k]||'');
+        if(target){ const d=extractDate(text); if(d&&d.getTime()===target.getTime()) return true; }
+        else { if(text.toLowerCase().includes(keyword.toLowerCase())) return true; } }
+      return false;
+    }
+
+    function clearSearch(){
+      document.getElementById('searchInput').value=''; document.getElementById('searchDateInput').value='';
+      document.getElementById('chkMachine').checked=false; document.getElementById('chkUseDate').checked=false;
+      document.getElementById('chkEmptyHB').checked=false;
+      applySearch(); setStatus('ล้างผลค้นหาแล้ว');
+    }
+    function toggleExpiredPage(){
+      isExpiredPage=!isExpiredPage;
+      const btn=document.getElementById('expiredBtn'), title=document.getElementById('pageTitle');
+      if(isExpiredPage){ btn.textContent='กลับหน้าหลัก'; btn.className='btn-gray'; title.textContent='รายการที่หมดอายุแล้ว'; }
+      else { btn.textContent='หมดอายุแล้ว'; btn.className='btn-red'; title.textContent='หัวบ้าน Duck Duck Premium'; }
+      applySearch();
+    }
+
+    function renderTable(rows,opts){
+      opts=opts||{};
+      const thead=document.getElementById('tableHead'), tbody=document.getElementById('tableBody');
+      thead.innerHTML=''; tbody.innerHTML='';
+      const hr=document.createElement('tr');
+      DISPLAY_FIELDS.forEach(f=>{
+        const th=document.createElement('th'); th.textContent=f.header;
+        if(f.width){ th.style.width=f.width+'px'; th.style.minWidth=f.width+'px'; th.style.maxWidth=f.width+'px'; }
+        hr.appendChild(th);
+      });
+      const thAct=document.createElement('th'); thAct.textContent='จัดการ'; hr.appendChild(thAct);
+      thead.appendChild(hr);
+
+      if(rows.length===0){ setStatus('ไม่พบข้อมูลที่ตรงกับคำค้นหา'); return; }
+      const useTarget=(opts.chkUseDate&&opts.keyword)?extractDate(opts.keyword):null;
+
+      rows.forEach(row=>{
+        const tr=document.createElement('tr');
+        DISPLAY_FIELDS.forEach(f=>{
+          const td=document.createElement('td');
+          let value=row[f.key]||'';
+          if(useTarget&&USE_KEYS.includes(f.key)){ const d=extractDate(value); if(!d||d.getTime()!==useTarget.getTime()) value=''; }
+          if(f.key==='status'){ value = effectiveStatus(row); }
+
+          if(USE_KEYS.includes(f.key) && value){
+            const m=String(value).match(/^(.*?)(\s+)(\d{1,2}\/\d{1,2}\/\d{2,4})\s*$/);
+            if(m){ td.innerHTML=escapeHtml(m[1].trim())+'<br>'+escapeHtml(m[3]); }
+            else { td.textContent=value; }
+          } else {
+            td.textContent=value;
+          }
+
+          if(f.width){ td.style.width=f.width+'px'; td.style.minWidth=f.width+'px'; td.style.maxWidth=f.width+'px'; }
+          if(USE_KEYS.includes(f.key)) td.classList.add('use-cell');
+          if(f.key==='machine') td.classList.add('machine-cell');
+
+          if(f.dateUser) td.style.backgroundColor=dateColor(value,true);
+          else if(f.dateExpire) td.style.backgroundColor=dateColor(value,false);
+
+          if(canEdit()){
+            td.style.cursor='pointer';
+            td.title='ดับเบิลคลิกเพื่อแก้ไขช่องนี้';
+            td.ondblclick=()=>quickEditCell(row, f.key, f.header, row[f.key]||'');
+          }
+          tr.appendChild(td);
+        });
+        const tdAct=document.createElement('td'); tdAct.className='actions';
+        if(canEdit()){
+          const b=document.createElement('button'); b.className='btn-yellow'; b.textContent='แก้ไข';
+          b.onclick=()=>openEditModal(row); tdAct.appendChild(b);
+        } else { tdAct.textContent='ดูเท่านั้น'; }
+        tr.appendChild(tdAct);
+        tbody.appendChild(tr);
+      });
+      setStatus('แสดง '+rows.length+' แถว');
+    }
+
+    function dateColor(value,checkWaiting){
+      const text=value?String(value).trim():'';
+      if(checkWaiting&&text.includes('รอเข้า')) return '#ffff00';
+      const d=extractDate(text); if(!text||!d) return '';
+      const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+      if(d.getTime()<=today.getTime()) return '#ff0000';
+      return '#ccffcc';
+    }
+    function extractDate(text){
+      if(!text) return null;
+      const m=String(text).match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if(!m) return null;
+      const day=parseInt(m[1],10),month=parseInt(m[2],10); let year=parseInt(m[3],10);
+      if(year<100) year=2500+year; if(year>2400) year-=543;
+      const d=new Date(year,month-1,day);
+      if(d.getFullYear()!==year||d.getMonth()!==month-1||d.getDate()!==day) return null;
+      return new Date(d.getFullYear(),d.getMonth(),d.getDate());
+    }
+
+    function showModalAlert(m){ const el=document.getElementById('modalAlert'); el.textContent=m; el.className='modal-alert show'; }
+    function hideModalAlert(){ const el=document.getElementById('modalAlert'); el.textContent=''; el.className='modal-alert'; }
+    function closeModal(){ hideModalAlert(); document.getElementById('modalBackdrop').style.display='none'; }
+
+    function buildForm(row){
+      const grid=document.getElementById('formGrid'); grid.innerHTML='';
+      FORM_FIELDS.forEach(f=>{
+        const g=document.createElement('div'); g.className='form-group';
+        const label=document.createElement('label'); label.textContent=f.header;
+        if(f.yearHint){ const h=document.createElement('span'); h.className='hint-red'; h.textContent='*ใส่ปีเป็น 2026'; label.appendChild(h); }
+        let input;
+        const value=row?(row[f.key]||''):'';
+        const fieldOpts = getOptionsFor(f.key);
+        if(fieldOpts){
+          input=document.createElement('select');
+          const blank=document.createElement('option'); blank.value=''; blank.textContent='-- เลือก --'; input.appendChild(blank);
+          let found=false;
+          fieldOpts.forEach(opt=>{
+            const o=document.createElement('option'); o.value=opt; o.textContent=opt;
+            if(String(value).trim()===String(opt).trim()){ o.selected=true; found=true; }
+            input.appendChild(o);
+          });
+          if(value&&!found){ const o=document.createElement('option'); o.value=value; o.textContent=value+' (ค่าเดิม)'; o.selected=true; input.appendChild(o); }
+        } else {
+          input=document.createElement('input'); input.type='text'; input.value=value;
+        }
+        input.id='field_'+f.key;
+        g.appendChild(label); g.appendChild(input); grid.appendChild(g);
+      });
+    }
+
+    function openAddModal(){
+      if(!canEdit()){ showPopup('ไม่มีสิทธิ์','บัญชีนี้ดูข้อมูลเท่านั้น','error'); return; }
+      hideModalAlert(); currentMode='add'; editingId=null;
+      document.getElementById('modalTitle').textContent='เพิ่มข้อมูลใหม่';
+      document.getElementById('deleteBtn').style.display='none';
+      buildForm(null); document.getElementById('modalBackdrop').style.display='block';
+    }
+    function openEditModal(row){
+      if(!canEdit()){ showPopup('ไม่มีสิทธิ์','บัญชีนี้ดูข้อมูลเท่านั้น','error'); return; }
+      hideModalAlert(); currentMode='edit'; editingId=row.id;
+      document.getElementById('modalTitle').textContent='แก้ไขข้อมูล (ID '+row.id+')';
+      document.getElementById('deleteBtn').style.display='inline-block';
+      buildForm(row); document.getElementById('modalBackdrop').style.display='block';
+    }
+    function getFormPayload(){
+      const payload={};
+      FORM_FIELDS.forEach(f=>{ const el=document.getElementById('field_'+f.key); payload[f.key]=el?el.value.trim():''; });
+      return payload;
+    }
+
+    async function saveData(){
+      hideModalAlert();
+      const payload=getFormPayload();
+      const btn=document.getElementById('saveBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก...';
+      let error;
+      if(currentMode==='add'){
+        const res=await sb.from('accounts').insert(payload).select().single();
+        error=res.error;
+        if(!error) await writeAudit('ADD', res.data.id, null, res.data);
+      } else {
+        const oldRow=accountsRows.find(r=>r.id===editingId);
+        const res=await sb.from('accounts').update(payload).eq('id',editingId);
+        error=res.error;
+        if(!error) await writeAudit('UPDATE', editingId, oldRow, payload);
+      }
+      btn.disabled=false; btn.textContent='บันทึก';
+      if(error){ showModalAlert('บันทึกไม่สำเร็จ: '+error.message); return; }
+      closeModal(); await loadAccounts();
+      showPopup(currentMode==='add'?'เพิ่มข้อมูลสำเร็จ':'บันทึกสำเร็จ','ข้อมูลถูกบันทึกแล้ว','success');
+    }
+
+    async function deleteCurrentRow(){
+      if(currentMode!=='edit'||!editingId){ showModalAlert('ไม่พบรายการที่จะลบ'); return; }
+      if(!confirm('ยืนยันลบ ID '+editingId+' ?\nเมื่อลบแล้วข้อมูลจะหายถาวร')) return;
+      const id=editingId;
+      const oldRow=accountsRows.find(r=>r.id===id);
+      const { error }=await sb.from('accounts').delete().eq('id',id);
+      if(error){ showModalAlert('ลบไม่สำเร็จ: '+error.message); return; }
+      await writeAudit('DELETE', id, oldRow, null);
+      closeModal(); await loadAccounts();
+      showPopup('ลบสำเร็จ','ลบข้อมูล ID '+id+' แล้ว','success');
+    }
+
+    let userRows = [], editingUserId = null;
+    function openUserModal(){
+      if(!isAdmin()){ showPopup('ไม่มีสิทธิ์','เฉพาะ ADMIN เท่านั้น','error'); return; }
+      hideUserAlert(); resetUserForm();
+      document.getElementById('userModalBackdrop').style.display='block';
+      loadUsers();
+    }
+    function closeUserModal(){ document.getElementById('userModalBackdrop').style.display='none'; }
+    function showUserAlert(m){ const el=document.getElementById('userModalAlert'); el.textContent=m; el.className='modal-alert show'; }
+    function hideUserAlert(){ const el=document.getElementById('userModalAlert'); el.textContent=''; el.className='modal-alert'; }
+
+    async function loadUsers(){
+      const { data, error }=await sb.from('user_profiles').select('id,username,name,role,status').order('username',{ascending:true});
+      if(error){ showUserAlert('โหลดรายชื่อไม่สำเร็จ: '+error.message); return; }
+      userRows=data||[]; renderUserTable();
+    }
+    function renderUserTable(){
+      const tbody=document.getElementById('userTableBody'); tbody.innerHTML='';
+      if(userRows.length===0){ const tr=document.createElement('tr'); const td=document.createElement('td'); td.colSpan=5; td.textContent='ยังไม่มีผู้ใช้'; tr.appendChild(td); tbody.appendChild(tr); return; }
+      userRows.forEach(u=>{
+        const tr=document.createElement('tr');
+        [u.username,u.name,u.role,u.status].forEach(v=>{ const td=document.createElement('td'); td.textContent=v||''; tr.appendChild(td); });
+        const tdAct=document.createElement('td'); tdAct.className='actions';
+        const eb=document.createElement('button'); eb.className='btn-yellow'; eb.textContent='แก้ไข'; eb.onclick=()=>editUser(u);
+        tdAct.appendChild(eb);
+        if(u.id!==currentUser.id){
+          const db=document.createElement('button'); db.className='btn-red'; db.textContent='ลบสิทธิ์'; db.style.marginLeft='4px'; db.onclick=()=>deleteUserProfile(u);
+          tdAct.appendChild(db);
+        }
+        tr.appendChild(tdAct); tbody.appendChild(tr);
+      });
+    }
+    function resetUserForm(){
+      editingUserId=null;
+      document.getElementById('uUsername').value=''; document.getElementById('uName').value='';
+      document.getElementById('uRole').value='EDITOR'; document.getElementById('uStatus').value='ACTIVE';
+      document.getElementById('uSaveBtn').textContent='บันทึก'; document.getElementById('uUsername').disabled=false;
+    }
+    function editUser(u){
+      editingUserId=u.id;
+      document.getElementById('uUsername').value=u.username||''; document.getElementById('uName').value=u.name||'';
+      document.getElementById('uRole').value=u.role||'EDITOR'; document.getElementById('uStatus').value=u.status||'ACTIVE';
+      document.getElementById('uSaveBtn').textContent='บันทึกการแก้ไข'; document.getElementById('uUsername').disabled=false;
+    }
+    async function saveUser(){
+      hideUserAlert();
+      const username=document.getElementById('uUsername').value.trim();
+      const name=document.getElementById('uName').value.trim();
+      const role=document.getElementById('uRole').value;
+      const status=document.getElementById('uStatus').value;
+      if(!username){ showUserAlert('กรุณาใส่ username'); return; }
+      if(editingUserId){
+        const { error }=await sb.from('user_profiles').update({ username, name, role, status, updated_by: currentUser.username, updated_at: new Date().toISOString() }).eq('id', editingUserId);
+        if(error){ showUserAlert('บันทึกไม่สำเร็จ: '+error.message); return; }
+        resetUserForm(); await loadUsers(); await loadMachineOptions();
+        showPopup('บันทึกสำเร็จ','แก้ไขผู้ใช้แล้ว','success');
+      } else {
+        showUserAlert('การสร้างผู้ใช้ใหม่:\n1) ไปที่ Supabase → Authentication → Add user สร้าง '+username+'@'+LOGIN_DOMAIN+'\n2) คัดลอก UID มาใส่ในช่องที่จะถามต่อไป');
+        const uid=prompt('วาง User UID จาก Supabase Dashboard:');
+        if(!uid){ return; }
+        const { error }=await sb.from('user_profiles').insert({ id: uid.trim(), username, name, role, status, created_by: currentUser.username });
+        if(error){ showUserAlert('สร้างไม่สำเร็จ: '+error.message+'\n(ตรวจว่า UID ถูกต้องและยังไม่มี profile)'); return; }
+        resetUserForm(); await loadUsers(); await loadMachineOptions();
+        showPopup('สร้างผู้ใช้สำเร็จ','ผูกสิทธิ์ให้ '+username+' แล้ว','success');
+      }
+    }
+    async function deleteUserProfile(u){
+      if(u.id===currentUser.id){ showUserAlert('ลบสิทธิ์ตัวเองไม่ได้'); return; }
+      if(!confirm('ลบสิทธิ์ของ '+u.username+' ?\n\nบัญชีล็อกอินจะยังอยู่ใน Supabase แต่จะเข้าระบบไม่ได้ (ไม่มี profile)\nถ้าต้องการลบบัญชีถาวร ให้ลบใน Dashboard → Authentication ด้วย')) return;
+      const { error }=await sb.from('user_profiles').delete().eq('id', u.id);
+      if(error){ showUserAlert('ลบไม่สำเร็จ: '+error.message); return; }
+      await loadUsers(); showPopup('ลบสิทธิ์สำเร็จ','ลบสิทธิ์ '+u.username+' แล้ว','success');
+    }
+
+    async function writeAudit(action, rowId, oldRow, newRow){
+      try {
+        let oldVal='', newVal='', colName='';
+        if(action==='UPDATE' && oldRow && newRow){
+          const changes=[];
+          FORM_FIELDS.forEach(f=>{
+            const ov=String(oldRow[f.key]||'').trim(); const nv=String(newRow[f.key]||'').trim();
+            if(ov!==nv) changes.push({h:f.header, ov, nv});
+          });
+          if(changes.length===0) return;
+          colName=changes.map(c=>c.h).join(', ');
+          oldVal=changes.map(c=>c.h+'='+c.ov).join(' | ');
+          newVal=changes.map(c=>c.h+'='+c.nv).join(' | ');
+        } else if(action==='ADD' && newRow){
+          colName='ADD';
+          newVal=FORM_FIELDS.filter(f=>String(newRow[f.key]||'').trim()).map(f=>f.header+'='+newRow[f.key]).join(' | ');
+        } else if(action==='DELETE' && oldRow){
+          colName='DELETE';
+          oldVal=DISPLAY_FIELDS.filter(f=>String(oldRow[f.key]||'').trim()).map(f=>f.header+'='+oldRow[f.key]).join(' | ');
+        }
+        await sb.from('audit_log').insert({
+          username: currentUser ? currentUser.username : '', action, row_id: rowId || null,
+          column_name: colName, old_value: oldVal, new_value: newVal,
+          machine: (newRow||oldRow||{}).machine || '', contact: (newRow||oldRow||{}).contact || ''
+        });
+      } catch(e){ console.log('audit error:', e); }
+    }
+
+    function openAuditModal(){
+      if(!isAdmin()){ showPopup('ไม่มีสิทธิ์','เฉพาะ ADMIN','error'); return; }
+      document.getElementById('auditModalBackdrop').style.display='block'; loadAudit();
+    }
+    async function loadAudit(){
+      const { data, error }=await sb.from('audit_log').select('*').order('ts',{ascending:false}).limit(200);
+      const tbody=document.getElementById('auditTableBody'); tbody.innerHTML='';
+      if(error){ const tr=document.createElement('tr'); const td=document.createElement('td'); td.colSpan=7; td.textContent='โหลดไม่สำเร็จ: '+error.message; tr.appendChild(td); tbody.appendChild(tr); return; }
+      (data||[]).forEach(r=>{
+        const tr=document.createElement('tr');
+        const ts=new Date(r.ts).toLocaleString('th-TH');
+        [ts, r.username, r.action, r.row_id, r.column_name, r.old_value, r.new_value].forEach(v=>{
+          const td=document.createElement('td'); td.textContent=v==null?'':v; tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function quickEditCell(row, key, header, oldValue){
+      if(!canEdit()){ showPopup('ไม่มีสิทธิ์','บัญชีนี้ดูข้อมูลเท่านั้น','error'); return; }
+      let newValue;
+      const opts = getOptionsFor(key);
+      if(opts && opts.length){
+        newValue = await pickFromList('แก้ไข: '+header, opts, oldValue);
+        if(newValue===null) return;
+      } else {
+        newValue = prompt('แก้ไข: '+header, oldValue||'');
+        if(newValue===null) return;
+        newValue = newValue.trim();
+      }
+      if(String(newValue)===String(oldValue).trim()) return;
+      const payload={}; payload[key]=newValue;
+      const oldRow = accountsRows.find(r=>r.id===row.id);
+      const { error } = await sb.from('accounts').update(payload).eq('id', row.id);
+      if(error){ showPopup('แก้ไขไม่สำเร็จ', error.message, 'error'); return; }
+      if(typeof writeAudit==='function' && oldRow){
+        const newRow = Object.assign({}, oldRow, payload);
+        await writeAudit('UPDATE', row.id, oldRow, newRow);
+      }
+      await loadAccounts();
+      setStatus('แก้ไข '+header+' ของ ID '+row.id+' แล้ว');
+    }
+
+    function startRealtime(){
+      stopRealtime();
+      realtimeChannel=sb.channel('accounts-changes')
+        .on('postgres_changes',{event:'*',schema:'public',table:'accounts'},p=>handleRealtime(p))
+        .subscribe(s=>{ document.getElementById('liveDot').className=(s==='SUBSCRIBED')?'live-dot on':'live-dot'; });
+    }
+    function stopRealtime(){ if(realtimeChannel){ sb.removeChannel(realtimeChannel); realtimeChannel=null; } document.getElementById('liveDot').className='live-dot'; }
+    function handleRealtime(payload){
+      const { eventType, new:n, old:o }=payload;
+      if(eventType==='INSERT') accountsRows.push(n);
+      else if(eventType==='UPDATE'){ const i=accountsRows.findIndex(r=>r.id===n.id); if(i>=0) accountsRows[i]=n; else accountsRows.push(n); }
+      else if(eventType==='DELETE') accountsRows=accountsRows.filter(r=>r.id!==o.id);
+      accountsRows.sort((a,b)=>a.id-b.id);
+      applySearch();
+    }
+
+    function isEmptyUse(val){ const t=String(val||'').trim(); return t===''||t==='ว่าง'; }
+    function rowHasEmptyHB(row){ return USE_KEYS.some(k => isEmptyUse(row[k])); }
+
+    function effectiveStatus(row){
+      const cur = String(row.status||'').trim();
+      const d = extractDate(row.expire_date);
+      if(!d) return cur;
+      const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+      if(d.getTime() <= today.getTime()) return 'ยังไม่เติม';
+      return cur;
+    }
+
+    async function syncExpiredStatus(){
+      if(!canEdit()) return;
+      const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+      const toUpdate = accountsRows.filter(row=>{
+        const d=extractDate(row.expire_date);
+        if(!d) return false;
+        if(d.getTime() > today.getTime()) return false;
+        return String(row.status||'').trim() !== 'ยังไม่เติม';
+      });
+      if(toUpdate.length===0) return;
+      for(const row of toUpdate){
+        const oldRow = Object.assign({}, row);
+        const { error } = await sb.from('accounts').update({ status:'ยังไม่เติม' }).eq('id', row.id);
+        if(!error && typeof writeAudit==='function'){
+          const newRow=Object.assign({}, oldRow, { status:'ยังไม่เติม' });
+          await writeAudit('UPDATE', row.id, oldRow, newRow);
+        }
+      }
+      setStatus('อัปเดตสถานะหมดอายุ '+toUpdate.length+' รายการแล้ว');
+      await loadAccounts();
+    }
+  </script>
+</body>
+</html>
