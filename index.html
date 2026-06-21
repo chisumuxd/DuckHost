@@ -79,6 +79,11 @@
     .popup-title { font-size:19px; font-weight:800; margin-bottom:8px; }
     .popup-msg { font-size:14px; color:#334155; white-space:pre-line; margin-bottom:18px; line-height:1.6; }
     @media (max-width:700px){ .form-grid{ grid-template-columns:1fr; } }
+    
+    .summary-box { flex:1; min-width:120px; padding:12px 16px; border-radius:12px; text-align:center; }
+    .summary-num { font-size:26px; font-weight:800; line-height:1.1; }
+    .summary-label { font-size:13px; font-weight:600; margin-top:2px; }
+  
   </style>
 </head>
 <body>
@@ -113,6 +118,25 @@
             <button id="addBtn" class="btn-blue" onclick="openAddModal()">+ เพิ่มข้อมูล</button>
             <button class="btn-blue" onclick="loadAccounts()">รีเฟรช</button>
             <button class="btn-gray" onclick="doLogout()">ออกจากระบบ</button>
+          </div>
+        </div>
+        
+        <div id="summaryBar" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+          <div class="summary-box" style="background:#e7f1ff; color:#084298;">
+            <div class="summary-num" id="sumTotal">-</div>
+            <div class="summary-label">หัวบ้านทั้งหมด</div>
+          </div>
+          <div class="summary-box" style="background:#d1e7dd; color:#0f5132;">
+            <div class="summary-num" id="sumActive">-</div>
+            <div class="summary-label">ใช้งานได้ปกติ</div>
+          </div>
+          <div class="summary-box" style="background:#f8d7da; color:#842029;">
+            <div class="summary-num" id="sumExpired">-</div>
+            <div class="summary-label">หลุดพรีเมี่ยม</div>
+          </div>
+          <div class="summary-box" style="background:#fff3cd; color:#664d03;">
+            <div class="summary-num" id="sumEmpty">-</div>
+            <div class="summary-label">หัวบ้านว่าง</div>
           </div>
         </div>
 
@@ -294,6 +318,20 @@
     function setLoginError(m){ const el=document.getElementById('loginError'); if(!m){el.className='login-error';el.textContent='';return;} el.textContent=m; el.className='login-error show'; }
     function setStatus(m){ document.getElementById('statusMsg').textContent = m || ''; }
     function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function updateSummary(){
+      const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+      let total=accountsRows.length, expired=0, empty=0;
+      accountsRows.forEach(row=>{
+        const d=extractDate(row.expire_date);
+        if(d && d.getTime()<=today.getTime()) expired++;
+        if(rowHasEmptyHB(row)) empty++;
+      });
+      const active = total - expired;
+      document.getElementById('sumTotal').textContent   = total.toLocaleString();
+      document.getElementById('sumActive').textContent  = active.toLocaleString();
+      document.getElementById('sumExpired').textContent = expired.toLocaleString();
+      document.getElementById('sumEmpty').textContent   = empty.toLocaleString();
+    }
 
     function showPopup(title, msg, type, cb){
       document.getElementById('popupIcon').className = 'popup-icon ' + (type==='error'?'error':'success');
@@ -380,6 +418,7 @@
       accountsRows = all;
       applySearch();
       setStatus('โหลดข้อมูลแล้ว '+accountsRows.length+' แถว');
+      updateSummary();
       syncExpiredStatus();
     }
 
@@ -775,6 +814,7 @@
       else if(eventType==='DELETE') accountsRows=accountsRows.filter(r=>r.id!==o.id);
       accountsRows.sort((a,b)=>a.id-b.id);
       applySearch();
+      updateSummary();
     }
 
     function isEmptyUse(val){ const t=String(val||'').trim(); return t===''||t==='ว่าง'; }
