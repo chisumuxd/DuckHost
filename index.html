@@ -422,11 +422,17 @@
       syncExpiredStatus();
     }
 
+   // ชื่อที่ไม่ให้เป็นตัวเลือกเครื่อง (เช่น operator/admin)
+      const MACHINE_EXCLUDE = ['Nu'];   // เพิ่มชื่ออื่นได้ เช่น ['Nu','Admin']
+
     async function loadMachineOptions(){
       const { data, error } = await sb.from('user_profiles').select('name').order('name',{ascending:true});
       if(error){ machineOptions=[]; return; }
-      const set=new Set();
-      (data||[]).forEach(u=>{ const n=String(u.name||'').trim(); if(n) set.add(n); });
+      const set = new Set();
+      (data||[]).forEach(u=>{
+        const n = String(u.name||'').trim();
+        if(n && !MACHINE_EXCLUDE.includes(n)) set.add(n);   // ← กรองชื่อที่ไม่ต้องการออก
+      });
       machineOptions = Array.from(set);
     }
 
