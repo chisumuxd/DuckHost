@@ -770,7 +770,7 @@
         const ts=new Date(r.ts).toLocaleString('th-TH');
         let emailLabel = '';
         if(r.row_id){
-          const acc = accountsRows.find(a=>a.id===r.row_id);
+          const acc = accountsRows.find(a=>String(a.id)===String(r.row_id));   // ← แปลงเป็น String ทั้งคู่
           emailLabel = acc ? (acc.email||('ID '+r.row_id)) : ('ID '+r.row_id);
         }
         [ts, r.username, r.action, r.row_id, r.column_name, r.old_value, r.new_value].forEach(v=>{
