@@ -750,9 +750,14 @@
           oldVal=DISPLAY_FIELDS.filter(f=>String(oldRow[f.key]||'').trim()).map(f=>f.header+'='+oldRow[f.key]).join(' | ');
         }
         await sb.from('audit_log').insert({
-          username: currentUser ? currentUser.username : '', action, row_id: rowId || null,
-          column_name: colName, old_value: oldVal, new_value: newVal,
-          machine: (newRow||oldRow||{}).machine || '', contact: (newRow||oldRow||{}).contact || ''
+          username: currentUser ? currentUser.username : '', 
+          action, row_id: rowId || null,
+          email: (newRow||oldRow||{}).email || '',
+          column_name: colName, 
+          old_value: oldVal, 
+          new_value: newVal,
+          machine: (newRow||oldRow||{}).machine || '', 
+          contact: (newRow||oldRow||{}).contact || ''
         });
       } catch(e){ console.log('audit error:', e); }
     }
@@ -768,12 +773,13 @@
       (data||[]).forEach(r=>{
         const tr=document.createElement('tr');
         const ts=new Date(r.ts).toLocaleString('th-TH');
-        let emailLabel = '';
-        if(r.row_id){
-          const acc = accountsRows.find(a=>String(a.id)===String(r.row_id));   // ← แปลงเป็น String ทั้งคู่
-          emailLabel = acc ? (acc.email||('ID '+r.row_id)) : ('ID '+r.row_id);
+        // ใช้ email จาก log ถ้ามี ไม่งั้น fallback หาจาก accountsRows หรือแสดง ID
+        let emailLabel = r.email || '';
+        if(!emailLabel && r.row_id){
+          const acc = accountsRows.find(a=>String(a.id)===String(r.row_id));
+          emailLabel = acc ? acc.email : ('ID '+r.row_id);
         }
-        [ts, r.username, r.action, r.row_id, r.column_name, r.old_value, r.new_value].forEach(v=>{
+        [ts, r.username, r.action, emailLabel, r.column_name, r.old_value, r.new_value].forEach(v=>{
           const td=document.createElement('td'); td.textContent=v==null?'':v; tr.appendChild(td);
         });
         tbody.appendChild(tr);
