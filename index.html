@@ -251,6 +251,7 @@
 
     const DROPDOWN_OPTIONS = { status: ['เติมโค้ดแล้ว', 'ยังไม่ได้เติม', 'ติดต่อไม่ได้'] };
     let machineOptions = [];
+    let userNameMap = {};   // { username: name } สำหรับ audit log
     
     const GIFT_CARD_URL = 'https://chisumuxd.github.io/DuckApple/';
     function openGiftCard(){
@@ -436,6 +437,7 @@
       (data||[]).forEach(u=>{
         const n = String(u.name||'').trim();
         if(n && !MACHINE_EXCLUDE.includes(n)) set.add(n);   // ← กรองชื่อที่ไม่ต้องการออก
+        if(u.username) userNameMap[u.username] = n || u.username;
       });
       machineOptions = Array.from(set);
     }
@@ -793,7 +795,8 @@
           const acc = accountsRows.find(a=>String(a.id)===String(r.row_id));
           emailLabel = acc ? acc.email : ('ID '+r.row_id);
         }
-        [ts, r.username, r.action, emailLabel, r.column_name, r.old_value, r.new_value].forEach(v=>{
+        const displayName = userNameMap[r.username] || r.username || '';
+        [ts, displayName, r.action, emailLabel, r.column_name, r.old_value, r.new_value].forEach(v=>{
           const td=document.createElement('td'); td.textContent=v==null?'':v; tr.appendChild(td);
         });
         tbody.appendChild(tr);
