@@ -492,6 +492,9 @@
       const thead=document.getElementById('tableHead'), tbody=document.getElementById('tableBody');
       thead.innerHTML=''; tbody.innerHTML='';
       const hr=document.createElement('tr');
+      const thNo=document.createElement('th'); thNo.textContent='ลำดับ';
+      thNo.style.width='50px'; thNo.style.minWidth='50px'; thNo.style.maxWidth='50px';
+      hr.appendChild(thNo);
       DISPLAY_FIELDS.forEach(f=>{
         const th=document.createElement('th'); th.textContent=f.header;
         if(f.width){ th.style.width=f.width+'px'; th.style.minWidth=f.width+'px'; th.style.maxWidth=f.width+'px'; }
@@ -503,8 +506,13 @@
       if(rows.length===0){ setStatus('ไม่พบข้อมูลที่ตรงกับคำค้นหา'); return; }
       const useTarget=(opts.chkUseDate&&opts.keyword)?extractDate(opts.keyword):null;
 
-      rows.forEach(row=>{
+      rows.forEach((row, idx)=>{
         const tr=document.createElement('tr');
+        const tdNo=document.createElement('td');
+        tdNo.textContent = idx+1;
+        tdNo.style.width='50px'; tdNo.style.minWidth='50px'; tdNo.style.maxWidth='50px';
+        tdNo.style.textAlign='center'; tdNo.style.color='#888';
+        tr.appendChild(tdNo);
         DISPLAY_FIELDS.forEach(f=>{
           const td=document.createElement('td');
           let value=row[f.key]||'';
