@@ -172,10 +172,10 @@
       </div>
       <div id="modalAlert" class="modal-alert"></div>
       <div id="formGrid" class="form-grid"></div>
-      <div class="modal-footer">
-        <button id="deleteBtn" class="btn-red" onclick="deleteCurrentRow()" style="display:none; margin-right:auto;">ลบ</button>
-        <button class="btn-gray" onclick="closeModal()">ยกเลิก</button>
+      <div class="modal-footer" style="justify-content:flex-start;">
         <button id="saveBtn" class="btn-primary" onclick="saveData()">บันทึก</button>
+        <button class="btn-gray" onclick="closeModal()">ยกเลิก</button>
+        <button id="deleteBtn" class="btn-red" onclick="deleteCurrentRow()" style="display:none; margin-left:auto;">ลบ</button>
       </div>
     </div>
   </div>
@@ -619,7 +619,7 @@
       if(!canEdit()){ showPopup('ไม่มีสิทธิ์','บัญชีนี้ดูข้อมูลเท่านั้น','error'); return; }
       hideModalAlert(); currentMode='edit'; editingId=row.id;
       document.getElementById('modalTitle').textContent='แก้ไขข้อมูล (ID '+row.id+')';
-      document.getElementById('deleteBtn').style.display='inline-block';
+      document.getElementById('deleteBtn').style.display = isAdmin() ? 'inline-block' : 'none';
       buildForm(row); document.getElementById('modalBackdrop').style.display='block';
     }
     function getFormPayload(){
