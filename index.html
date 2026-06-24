@@ -431,7 +431,7 @@
       const MACHINE_EXCLUDE = ['Nu'];   // เพิ่มชื่ออื่นได้ เช่น ['Nu','Admin']
 
     async function loadMachineOptions(){
-      const { data, error } = await sb.from('user_profiles').select('name').order('name',{ascending:true});
+      const { data, error } = await sb.from('user_profiles').select('username,name').order('name',{ascending:true});
       if(error){ machineOptions=[]; return; }
       const set = new Set();
       (data||[]).forEach(u=>{
