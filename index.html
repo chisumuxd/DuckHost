@@ -940,7 +940,7 @@
     }
     
       async function showFieldHistory(row, field){
-      if(!isAdmin()){ showPopup('ไม่มีสิทธิ์','ดูประวัติได้เฉพาะ ADMIN','error'); return; }
+      if(!canEdit()){ showPopup('ไม่มีสิทธิ์','ดูประวัติได้เฉพาะ ADMIN/EDITOR','error'); return; }
       setStatus('กำลังโหลดประวัติ...');
 
       // ดึง log ของแถวนี้ (row_id หรือ email) เรียงใหม่ล่าสุดก่อน
