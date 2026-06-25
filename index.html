@@ -452,16 +452,7 @@
       let selectedDate=null; if(dateStr){const p=dateStr.split('-'); selectedDate=new Date(+p[0],+p[1]-1,+p[2]);}
       const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
       const keywords=keyword?keyword.split(/\s+/).filter(Boolean):[];
-
-      // ถ้าไม่มีเงื่อนไขค้นหาใด ๆ → ไม่แสดงข้อมูล (หน้าแรกว่าง)
-      const hasFilter = keywords.length>0 || chkEmptyHB || selectedDate || isExpiredPage;
-      if(!hasFilter){
-        renderTable([], {chkUseDate,keyword});
-        setStatus('พิมพ์คำค้นหา หรือเลือกตัวกรอง เพื่อแสดงข้อมูล');
-        return;
-      }
-
-      const result=accountsRows.filter(row=>{
+       const result=accountsRows.filter(row=>{
         if(keywords.length>0){
           const ok=keywords.every(w=>{
             if(chkUseDate) return useMatchDate(row,w);
