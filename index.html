@@ -674,7 +674,7 @@
 
     let userRows = [], editingUserId = null;
     function openUserModal(){
-      if(!isAdmin()){ showPopup('ไม่มีสิทธิ์','เฉพาะ ADMIN เท่านั้น','error'); return; }
+      if(!canEdit()){ showPopup('ไม่มีสิทธิ์','ดูประวัติได้เฉพาะ ADMIN/EDITOR','error'); return; }
       hideUserAlert(); resetUserForm();
       document.getElementById('userModalBackdrop').style.display='block';
       loadUsers();
