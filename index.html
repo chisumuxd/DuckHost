@@ -241,6 +241,7 @@
 
   <div id="ctxMenu" style="display:none; position:fixed; z-index:9998; background:#fff; border:1px solid #ccc; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,0.2); padding:4px; min-width:140px;">
     <div id="ctxCopy" style="padding:9px 14px; cursor:pointer; font-size:14px; border-radius:6px;">📋 คัดลอกช่องนี้</div>
+    <div id="ctxHistory" style="padding:9px 14px; cursor:pointer; font-size:14px; border-radius:6px;">�’ ดูประวัติช่องนี้</div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -546,7 +547,7 @@
             td.ondblclick=()=>quickEditCell(row, f.key, f.header, row[f.key]||'');
           }
 
-          td.oncontextmenu=(e)=>{ e.preventDefault(); showCtxMenu(e, row[f.key]||''); };
+          td.oncontextmenu=(e)=>{ e.preventDefault(); showCtxMenu(e, row[f.key]||'', row, f); };
           tr.appendChild(td);
         });
         const tdAct=document.createElement('td'); tdAct.className='actions';
@@ -870,9 +871,11 @@
       return cur;
     }
 
-    let ctxValue = '';
-    function showCtxMenu(e, value){
+    let ctxValue = '', ctxRow = null, ctxField = null;
+    function showCtxMenu(e, value, row, field){
       ctxValue = String(value||'');
+      ctxRow = row || null;
+      ctxField = field || null;
       const menu = document.getElementById('ctxMenu');
       menu.style.display = 'block';
       // วางเมนูตรงตำแหน่งเมาส์ (กันล้นขอบจอ)
@@ -904,6 +907,14 @@
         }
         hideCtxMenu();
       };
+        const histBtn = document.getElementById('ctxHistory');
+          histBtn.onmouseover = ()=> histBtn.style.background='#eef';
+          histBtn.onmouseout  = ()=> histBtn.style.background='';
+          histBtn.onclick = async ()=>{
+        hideCtxMenu();
+        if(!ctxRow || !ctxField){ return; }
+        await showFieldHistory(ctxRow, ctxField);
+      };
     });
     
     async function syncExpiredStatus(){
@@ -927,6 +938,74 @@
       setStatus('อัปเดตสถานะหมดอายุ '+toUpdate.length+' รายการแล้ว');
       await loadAccounts();
     }
+    
+      async function showFieldHistory(row, field){
+      if(!isAdmin()){ showPopup('ไม่มีสิทธิ์','ดูประวัติได้เฉพาะ ADMIN','error'); return; }
+      setStatus('กำลังโหลดประวัติ...');
+
+      // ดึง log ของแถวนี้ (row_id หรือ email) เรียงใหม่ล่าสุดก่อน
+      const { data, error } = await sb.from('audit_log')
+        .select('*')
+        .or('row_id.eq.'+row.id+',email.eq.'+(row.email||'__none__'))
+        .order('ts',{ascending:false})
+        .limit(200);
+
+      if(error){ showPopup('ผิดพลาด', error.message, 'error'); return; }
+
+      // กรองเฉพาะ log ที่แตะคอลัมน์นี้ (column_name มีชื่อหัวคอลัมน์นี้)
+      const header = field.header;
+      const rows = (data||[]).filter(r=>{
+        if(!r.column_name) return false;
+        if(r.action==='ADD' || r.action==='DELETE') return true;   // เพิ่ม/ลบ แสดงด้วย
+        return r.column_name.split(', ').includes(header);
+      });
+
+      // สร้างข้อความประวัติ
+      let html = '<div style="text-align:left; max-height:50vh; overflow:auto;">';
+      html += '<div style="font-weight:800; color:#0f5132; margin-bottom:10px;">ประวัติช่อง "'+escapeHtml(header)+'" ('+escapeHtml(row.email||('ID '+row.id))+')</div>';
+      if(rows.length===0){
+        html += '<div style="color:#888;">ยังไม่มีประวัติการแก้ไขช่องนี้</div>';
+      } else {
+        rows.forEach(r=>{
+          const ts=new Date(r.ts).toLocaleString('th-TH');
+          const who=userNameMap[r.username]||r.username||'';
+          // ดึงเฉพาะค่าของคอลัมน์นี้จาก old/new (ที่เก็บแบบ "หัว=ค่า | หัว=ค่า")
+          const oldV = pickColVal(r.old_value, header);
+          const newV = pickColVal(r.new_value, header);
+          let detail='';
+          if(r.action==='UPDATE') detail = '<span style="color:#842029;">'+escapeHtml(oldV||'(ว่าง)')+'</span> → <span style="color:#0f5132;">'+escapeHtml(newV||'(ว่าง)')+'</span>';
+          else if(r.action==='ADD') detail = '<span style="color:#0d6efd;">เพิ่มข้อมูล</span>';
+          else if(r.action==='DELETE') detail = '<span style="color:#dc3545;">ลบข้อมูล</span>';
+          html += '<div style="border-bottom:1px solid #eee; padding:8px 0;">'
+                + '<div style="font-size:13px;">'+detail+'</div>'
+                + '<div style="font-size:11px; color:#888;">'+escapeHtml(who)+' • '+ts+'</div>'
+                + '</div>';
+        });
+      }
+      html += '</div>';
+
+      // แสดงใน popup (ใช้ innerHTML)
+      document.getElementById('popupIcon').className='popup-icon success';
+      document.getElementById('popupIcon').textContent='🕒';
+      document.getElementById('popupTitle').textContent='ประวัติการแก้ไข';
+      document.getElementById('popupMsg').innerHTML = html;
+      document.getElementById('popupMsg').style.whiteSpace='normal';
+      popupCb=null;
+      document.getElementById('popupBackdrop').style.display='block';
+      setStatus('');
+    }
+
+    // ดึงค่าของคอลัมน์ที่ต้องการ จากสตริง "หัว=ค่า | หัว=ค่า"
+    function pickColVal(str, header){
+      if(!str) return '';
+      const parts = String(str).split(' | ');
+      for(const p of parts){
+        const idx = p.indexOf('=');
+        if(idx>0 && p.slice(0,idx)===header) return p.slice(idx+1);
+      }
+      return '';
+    }
+    
   </script>
 </body>
 </html>
