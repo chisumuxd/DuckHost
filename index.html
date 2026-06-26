@@ -655,7 +655,10 @@
       }
       btn.disabled=false; btn.textContent='บันทึก';
       if(error){ showModalAlert('บันทึกไม่สำเร็จ: '+error.message); return; }
-      closeModal(); await loadAccounts();
+      // อัปเดต local
+      if(currentMode==='add'){ accountsRows.push(payload); accountsRows.sort((a,b)=>a.id-b.id); }
+      else { const i=accountsRows.findIndex(r=>r.id===editingId); if(i>=0) accountsRows[i]=Object.assign({},accountsRows[i],payload); }
+      closeModal(); applySearch(); updateSummary();
       showPopup(currentMode==='add'?'เพิ่มข้อมูลสำเร็จ':'บันทึกสำเร็จ','ข้อมูลถูกบันทึกแล้ว','success');
     }
 
@@ -667,7 +670,8 @@
       const { error }=await sb.from('accounts').delete().eq('id',id);
       if(error){ showModalAlert('ลบไม่สำเร็จ: '+error.message); return; }
       await writeAudit('DELETE', id, oldRow, null);
-      closeModal(); await loadAccounts();
+      accountsRows = accountsRows.filter(r=>r.id!==id);   // ลบ local
+      closeModal(); applySearch(); updateSummary();
       showPopup('ลบสำเร็จ','ลบข้อมูล ID '+id+' แล้ว','success');
     }
 
@@ -830,7 +834,11 @@
         const newRow = Object.assign({}, oldRow, payload);
         await writeAudit('UPDATE', row.id, oldRow, newRow);
       }
-      await loadAccounts();
+      // อัปเดตเฉพาะแถวนี้ในหน่วยความจำ ไม่โหลดใหม่ทั้งหมด (ประหยัด egress)
+      const idx = accountsRows.findIndex(r=>r.id===row.id);
+      if(idx>=0) accountsRows[idx] = Object.assign({}, accountsRows[idx], payload);
+      applySearch();
+      updateSummary();
       setStatus('แก้ไข '+header+' ของ ID '+row.id+' แล้ว');
     }
 
@@ -929,13 +937,15 @@
       for(const row of toUpdate){
         const oldRow = Object.assign({}, row);
         const { error } = await sb.from('accounts').update({ status:'ยังไม่เติม' }).eq('id', row.id);
+        if(!error) row.status = 'ยังไม่เติม';
         if(!error && typeof writeAudit==='function'){
           const newRow=Object.assign({}, oldRow, { status:'ยังไม่เติม' });
           await writeAudit('UPDATE', row.id, oldRow, newRow);
         }
       }
       setStatus('อัปเดตสถานะหมดอายุ '+toUpdate.length+' รายการแล้ว');
-      await loadAccounts();
+      applySearch();
+      updateSummary();
     }
     
       async function showFieldHistory(row, field){
