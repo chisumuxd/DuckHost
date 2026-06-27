@@ -256,6 +256,15 @@
     const CACHE_KEY = 'duck_v1';
 
     const DROPDOWN_OPTIONS = { status: ['เติมโค้ดแล้ว', 'ยังไม่เติม', 'ติดต่อไม่ได้', 'ปิดย้าย'] };
+    const STORE_OPTIONS = ['Duck', 'Indy'];   // ร้านสำหรับช่อง Use 1-5 (เพิ่มชื่อร้านได้ที่นี่)
+    const STORE_COLORS  = { 'Duck':'#ffc107', 'Indy':'#9333ea' };   // สีป้ายแต่ละร้าน (แก้สีตรงนี้)
+    function storeColor(s){ return STORE_COLORS[s] || '#6c757d'; }
+    // เลือกสีตัวอักษร (ดำ/ขาว) อัตโนมัติให้อ่านออกบนสีพื้น
+    function readableText(hex){
+      const h=String(hex||'').replace('#',''); if(h.length<6) return '#fff';
+      const r=parseInt(h.substr(0,2),16), g=parseInt(h.substr(2,2),16), b=parseInt(h.substr(4,2),16);
+      return ((0.299*r + 0.587*g + 0.114*b)/255) > 0.6 ? '#222' : '#fff';
+    }
     let machineOptions = [];
     let userNameMap = {};
 
@@ -391,6 +400,89 @@
       });
     }
 
+    // สร้าง HTML ช่อง Use แบบ "ป้ายร้าน + ชื่อ" บรรทัดบน, วันที่บรรทัดล่าง
+    function useCellHtml(value){
+      const v = String(value||'');
+      const m = v.match(/^(.*?)(\s+)(\d{1,2}\/\d{1,2}\/\d{2,4})\s*$/);
+      let head = v, date = '';
+      if(m){ head = m[1].trim(); date = m[3]; }
+      let store = '';
+      for(const s of STORE_OPTIONS){
+        if(head.toLowerCase() === s.toLowerCase()){ store = s; head = ''; break; }
+        if(head.toLowerCase().startsWith(s.toLowerCase()+' ')){ store = s; head = head.slice(s.length).trim(); break; }
+      }
+      let html = '<div style="display:flex;align-items:center;gap:3px;flex-wrap:wrap;line-height:1.25;">';
+      if(store){ const bg=storeColor(store); html += '<span style="background:'+bg+';color:'+readableText(bg)+';font-size:9px;font-weight:bold;padding:1px 5px;border-radius:8px;">'+escapeHtml(store)+'</span>'; }
+      if(head)  html += '<span style="font-weight:bold;">'+escapeHtml(head)+'</span>';
+      html += '</div>';
+      if(date)  html += '<div style="font-size:11px;color:rgba(0,0,0,0.6);line-height:1.2;">'+escapeHtml(date)+'</div>';
+      return html;
+    }
+
+    // ตัดชื่อร้านที่นำหน้าออก (กันซ้อนเวลาเปลี่ยนร้าน)
+    function stripStorePrefix(val){
+      let v = String(val||'').trim();
+      for(const s of STORE_OPTIONS){
+        if(v.toLowerCase() === s.toLowerCase()){ return ''; }
+        if(v.toLowerCase().startsWith(s.toLowerCase()+' ')){ return v.slice(s.length).trim(); }
+      }
+      return v;
+    }
+
+    // กล่องแก้ไขช่อง Use — มีปุ่มเลือกร้าน + ช่องพิมพ์ชื่อ/วันที่
+    function editUseValue(title, currentValue){
+      return new Promise(resolve=>{
+        const backdrop=document.createElement('div');
+        backdrop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
+        const box=document.createElement('div');
+        box.style.cssText='background:#fff;max-width:420px;width:100%;margin:12vh auto 0;border-radius:18px;padding:20px;box-shadow:0 18px 45px rgba(0,0,0,0.28);';
+        const h=document.createElement('div'); h.textContent=title;
+        h.style.cssText='font-size:17px;font-weight:800;color:#0f5132;margin-bottom:12px;'; box.appendChild(h);
+
+        // แถวปุ่มเลือกร้าน
+        const storeRow=document.createElement('div');
+        storeRow.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;';
+        const storeLabel=document.createElement('div');
+        storeLabel.textContent='เลือกร้าน:'; storeLabel.style.cssText='width:100%;font-size:13px;font-weight:700;color:#555;';
+        storeRow.appendChild(storeLabel);
+
+        const input=document.createElement('input'); input.type='text'; input.value=String(currentValue||'');
+        input.style.cssText='width:100%;padding:11px 12px;border:1px solid #ccc;border-radius:10px;font-size:15px;margin:6px 0 4px;';
+
+        STORE_OPTIONS.forEach(store=>{
+          const b=document.createElement('button'); b.textContent=store;
+          b.style.cssText='flex:1;min-width:90px;padding:11px;border-radius:10px;border:1px solid #0d6efd;background:#e7f1ff;color:#084298;font-size:15px;font-weight:700;cursor:pointer;';
+          b.onclick=()=>{ const rest=stripStorePrefix(input.value); input.value=(store+' '+rest).trim()+(rest?'':' '); input.focus(); };
+          storeRow.appendChild(b);
+        });
+        box.appendChild(storeRow);
+
+        const hint=document.createElement('div');
+        hint.textContent='รูปแบบ: [ร้าน] ชื่อ + วันที่  เช่น  Duck nannamonjam 7/7/69';
+        hint.style.cssText='font-size:12px;color:#d93025;font-weight:600;margin-bottom:4px;';
+        box.appendChild(hint);
+        box.appendChild(input);
+        input.onkeydown=(e)=>{ if(e.key==='Enter'){ document.body.removeChild(backdrop); resolve(input.value.trim()); } };
+
+        const footer=document.createElement('div'); footer.style.cssText='display:flex;gap:10px;margin-top:12px;';
+        const okBtn=document.createElement('button'); okBtn.textContent='ตกลง';
+        okBtn.style.cssText='flex:1;padding:11px;border-radius:10px;border:none;background:#198754;color:#fff;font-weight:700;cursor:pointer;';
+        okBtn.onclick=()=>{ document.body.removeChild(backdrop); resolve(input.value.trim()); };
+        const clearBtn=document.createElement('button'); clearBtn.textContent='ลบค่า';
+        clearBtn.style.cssText='flex:1;padding:11px;border-radius:10px;border:none;background:#ffc107;color:#222;font-weight:700;cursor:pointer;';
+        clearBtn.onclick=()=>{ document.body.removeChild(backdrop); resolve(''); };
+        const cancelBtn=document.createElement('button'); cancelBtn.textContent='ยกเลิก';
+        cancelBtn.style.cssText='flex:1;padding:11px;border-radius:10px;border:none;background:#6c757d;color:#fff;font-weight:700;cursor:pointer;';
+        cancelBtn.onclick=()=>{ document.body.removeChild(backdrop); resolve(null); };
+        footer.appendChild(okBtn); footer.appendChild(clearBtn); footer.appendChild(cancelBtn); box.appendChild(footer);
+
+        backdrop.appendChild(box);
+        backdrop.onclick=(e)=>{ if(e.target===backdrop){ document.body.removeChild(backdrop); resolve(null); } };
+        document.body.appendChild(backdrop);
+        setTimeout(()=>input.focus(), 50);
+      });
+    }
+
     async function doLogin(){
       setLoginError('');
       const u=document.getElementById('loginUsername').value.trim();
@@ -504,7 +596,7 @@
         applySearch(); updateSummary();
         const msg = (changed && changed.length > 0)
           ? 'ซิงก์แล้ว '+changed.length+' รายการ'
-          : 'ข้อมูลล่าสุดแล้ว';
+          : 'ข้อมูลทันสมัยแล้ว';
         setStatus(msg+' (ทั้งหมด '+accountsRows.length+' แถว)');
       } finally {
         syncing = false;
@@ -691,9 +783,7 @@
           if(f.key==='status'){ value = effectiveStatus(row); }
 
           if(USE_KEYS.includes(f.key) && value){
-            const m=String(value).match(/^(.*?)(\s+)(\d{1,2}\/\d{1,2}\/\d{2,4})\s*$/);
-            if(m){ td.innerHTML=escapeHtml(m[1].trim())+'<br>'+escapeHtml(m[3]); }
-            else { td.textContent=value; }
+            td.innerHTML = useCellHtml(value);
           } else {
             td.textContent=value;
           }
@@ -1008,7 +1098,10 @@
       if(!canEdit()){ showPopup('ไม่มีสิทธิ์','บัญชีนี้ดูข้อมูลเท่านั้น','error'); return; }
       let newValue;
       const opts = getOptionsFor(key);
-      if(opts && opts.length){
+      if(USE_KEYS.includes(key)){
+        newValue = await editUseValue('แก้ไข: '+header, oldValue);
+        if(newValue===null) return;
+      } else if(opts && opts.length){
         newValue = await pickFromList('แก้ไข: '+header, opts, oldValue);
         if(newValue===null) return;
       } else {
