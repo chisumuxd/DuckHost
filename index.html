@@ -115,7 +115,6 @@
             <button id="manageUsersBtn" class="btn-gray" style="display:none;" onclick="openUserModal()">จัดการผู้ใช้</button>
             <button id="auditBtn" class="btn-gray" style="display:none;" onclick="openAuditModal()">ประวัติ</button>
             <button id="addBtn" class="btn-blue" onclick="openAddModal()">+ เพิ่มข้อมูล</button>
-            <button class="btn-blue" onclick="loadAccounts()" title="ซิงก์เฉพาะส่วนที่เปลี่ยน">ซิงก์</button>
             <button class="btn-gray" onclick="forceReload()" title="ล้าง cache แล้วโหลดใหม่ทั้งหมด">↻ โหลดใหม่</button>
             <button class="btn-gray" onclick="doLogout()">ออกจากระบบ</button>
           </div>
@@ -318,6 +317,9 @@
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     let currentUser = null, accountsRows = [], realtimeChannel = null, isExpiredPage = false;
     let currentMode = 'edit', editingId = null, popupCb = null;
+    let syncing = false, lastAutoSync = 0, autoSyncTimer = null;
+    const AUTO_SYNC_MIN_GAP = 15000;          // กันซิงก์ถี่เกิน (15 วิ)
+    const AUTO_SYNC_INTERVAL = 5 * 60 * 1000; // ซิงก์สำรองทุก 5 นาที
 
     window.onload = async function () {
       const { data } = await sb.auth.getSession();
@@ -410,12 +412,12 @@
       document.getElementById('manageUsersBtn').style.display = (currentUser.role==='ADMIN') ? 'inline-block' : 'none';
       document.getElementById('auditBtn').style.display = (currentUser.role==='ADMIN') ? 'inline-block' : 'none';
       await loadMachineOptions();
-      showApp(); await loadAccounts(); startRealtime();
+      showApp(); await loadAccounts(); startRealtime(); startAutoSync();
     }
     function canEdit(){ return currentUser && (currentUser.role==='ADMIN' || currentUser.role==='EDITOR'); }
     function isAdmin(){ return currentUser && currentUser.role==='ADMIN'; }
 
-    async function doLogout(){ stopRealtime(); await sb.auth.signOut(); currentUser=null; accountsRows=[];
+    async function doLogout(){ stopRealtime(); stopAutoSync(); await sb.auth.signOut(); currentUser=null; accountsRows=[];
       document.getElementById('loginUsername').value=''; document.getElementById('loginPassword').value=''; showLogin(); }
 
     // ===== CACHE + DELTA SYNC =====
@@ -445,43 +447,75 @@
       }
     }
 
-    async function deltaSync(lastSync){
-      // ดึงเฉพาะแถวที่เปลี่ยนหลัง lastSync (แบ่งหน้า กัน limit 1000 ของ Supabase)
-      const PAGE=1000; let from=0; let changed=[];
-      while(true){
-        const { data, error } = await sb.from('accounts')
-          .select(COLS).gt('updated_at', lastSync)
-          .order('updated_at',{ascending:true}).order('id',{ascending:true})
-          .range(from, from+PAGE-1);
-        if(error){ setStatus('ซิงก์ไม่สำเร็จ: '+error.message); return; }
-        changed = changed.concat(data||[]);
-        if(!data || data.length < PAGE) break;
-        from += PAGE; if(from > 100000) break;
+    async function deltaSync(lastSync, opts){
+      opts = opts || {};
+      const detectDeletes = opts.detectDeletes !== false;  // ค่าเริ่มต้น = ตรวจการลบด้วย
+      if(syncing) return;                                  // กันซิงก์ซ้อนกัน
+      syncing = true;
+      try {
+        // ดึงเฉพาะแถวที่เปลี่ยนหลัง lastSync (แบ่งหน้า กัน limit 1000 ของ Supabase)
+        const PAGE=1000; let from=0; let changed=[];
+        while(true){
+          const { data, error } = await sb.from('accounts')
+            .select(COLS).gt('updated_at', lastSync)
+            .order('updated_at',{ascending:true}).order('id',{ascending:true})
+            .range(from, from+PAGE-1);
+          if(error){ setStatus('ซิงก์ไม่สำเร็จ: '+error.message); return; }
+          changed = changed.concat(data||[]);
+          if(!data || data.length < PAGE) break;
+          from += PAGE; if(from > 100000) break;
+        }
+
+        // ตรวจแถวที่ถูกลบ (ดึงเฉพาะ id) — ทำเมื่อจำเป็นเท่านั้นเพื่อประหยัด egress
+        // ระหว่าง realtime เชื่อมต่ออยู่ มันส่ง event ลบให้แล้ว จึงข้ามได้ตอน poll ปกติ
+        const ids = detectDeletes ? await fetchAllIds() : null;
+
+        let newest = lastSync;
+        (changed||[]).forEach(n=>{
+          const i = accountsRows.findIndex(r=>r.id===n.id);
+          if(i>=0) accountsRows[i]=n; else accountsRows.push(n);
+          if((n.updated_at||'') > newest) newest = n.updated_at;
+        });
+
+        if(ids){
+          const liveSet = new Set(ids.map(r=>r.id));
+          accountsRows = accountsRows.filter(r=>liveSet.has(r.id));
+        }
+
+        accountsRows.sort((a,b)=>a.id-b.id);
+        saveCache(newest);
+        applySearch(); updateSummary();
+        const msg = (changed && changed.length > 0)
+          ? 'ซิงก์แล้ว '+changed.length+' รายการ'
+          : 'ข้อมูลทันสมัยแล้ว';
+        setStatus(msg+' (ทั้งหมด '+accountsRows.length+' แถว)');
+      } finally {
+        syncing = false;
       }
-
-      // ดึง id ทั้งหมดเพื่อหาแถวที่ถูกลบ (เฉพาะ id เล็กมาก แต่ต้องแบ่งหน้าเช่นกัน)
-      const ids = await fetchAllIds();
-
-      let newest = lastSync;
-      (changed||[]).forEach(n=>{
-        const i = accountsRows.findIndex(r=>r.id===n.id);
-        if(i>=0) accountsRows[i]=n; else accountsRows.push(n);
-        if((n.updated_at||'') > newest) newest = n.updated_at;
-      });
-
-      if(ids){
-        const liveSet = new Set(ids.map(r=>r.id));
-        accountsRows = accountsRows.filter(r=>liveSet.has(r.id));
-      }
-
-      accountsRows.sort((a,b)=>a.id-b.id);
-      saveCache(newest);
-      applySearch(); updateSummary();
-      const msg = (changed && changed.length > 0)
-        ? 'ซิงก์แล้ว '+changed.length+' รายการ'
-        : 'ข้อมูลทันสมัยแล้ว';
-      setStatus(msg+' (ทั้งหมด '+accountsRows.length+' แถว)');
     }
+
+    // ซิงก์อัตโนมัติ — เบาและประหยัด egress
+    async function autoSync(reason){
+      if(!currentUser || document.hidden || syncing) return;
+      const now = Date.now();
+      if(now - lastAutoSync < AUTO_SYNC_MIN_GAP) return;   // กันถี่เกิน
+      lastAutoSync = now;
+      // กลับมาโฟกัส/ต่อเน็ตใหม่ = อาจพลาด event ลบ → ตรวจ id ด้วย
+      // poll ปกติ = realtime ส่งการลบให้แล้ว → ข้าม id เพื่อประหยัด
+      const detectDeletes = (reason === 'visible' || reason === 'reconnect');
+      await deltaSync(getMaxUpdatedAt(), { detectDeletes });
+    }
+
+    function startAutoSync(){
+      stopAutoSync();
+      autoSyncTimer = setInterval(()=>autoSync('interval'), AUTO_SYNC_INTERVAL);
+    }
+    function stopAutoSync(){
+      if(autoSyncTimer){ clearInterval(autoSyncTimer); autoSyncTimer = null; }
+    }
+
+    // กลับมาโฟกัสที่แท็บ (พับจอ/สลับแท็บกลับมา) → ซิงก์เก็บตก
+    document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) autoSync('visible'); });
 
     async function fetchAllIds(){
       const PAGE=1000; let from=0; let all=[];
@@ -948,9 +982,16 @@
 
     function startRealtime(){
       stopRealtime();
+      let everSubscribed = false;
       realtimeChannel=sb.channel('accounts-changes')
         .on('postgres_changes',{event:'*',schema:'public',table:'accounts'},p=>handleRealtime(p))
-        .subscribe(s=>{ document.getElementById('liveDot').className=(s==='SUBSCRIBED')?'live-dot on':'live-dot'; });
+        .subscribe(s=>{
+          document.getElementById('liveDot').className=(s==='SUBSCRIBED')?'live-dot on':'live-dot';
+          if(s==='SUBSCRIBED'){
+            if(everSubscribed) autoSync('reconnect');   // ต่อเน็ตใหม่หลังหลุด → ซิงก์เก็บตก
+            everSubscribed = true;
+          }
+        });
     }
     function stopRealtime(){ if(realtimeChannel){ sb.removeChannel(realtimeChannel); realtimeChannel=null; } document.getElementById('liveDot').className='live-dot'; }
 
