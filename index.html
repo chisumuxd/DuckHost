@@ -600,6 +600,16 @@
       const dateStr=document.getElementById('searchDateInput').value;
       let selectedDate=null; if(dateStr){const p=dateStr.split('-'); selectedDate=new Date(+p[0],+p[1]-1,+p[2]);}
       const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+
+      // หน้าแรกว่าง — แสดงข้อมูลก็ต่อเมื่อมีการค้นหา/กรองที่ยืนได้ด้วยตัวเอง
+      // (chkUseDate / chkMachine เป็นแค่ตัวปรับการค้นหา ต้องมีคำค้นด้วยถึงจะนับ)
+      const hasFilter = !!(keyword || dateStr || chkEmptyHB || isExpiredPage);
+      if(!hasFilter){
+        renderTable([], {});
+        setStatus('🔍 พิมพ์คำค้นหา หรือเลือกตัวกรอง เพื่อแสดงข้อมูล (ทั้งหมด '+accountsRows.length.toLocaleString()+' แถว)');
+        return;
+      }
+
       const keywords=keyword?keyword.split(/\s+/).filter(Boolean):[];
       const result=accountsRows.filter(row=>{
         if(keywords.length>0){
