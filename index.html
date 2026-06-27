@@ -4,9 +4,9 @@
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Youtube Duck</title></title>
+  <title>Youtube Duck</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PGNpcmNsZSBjeD0iMzIiIGN5PSIzMyIgcj0iMjYiIGZpbGw9IiNmZmQ0M2IiIHN0cm9rZT0iI2Y3Yzk0OCIgc3Ryb2tlLXdpZHRoPSIzIi8+PGNpcmNsZSBjeD0iMjQiIGN5PSIzMCIgcj0iMy40IiBmaWxsPSIjNGIyZTAwIi8+PGNpcmNsZSBjeD0iNDAiIGN5PSIzMCIgcj0iMy40IiBmaWxsPSIjNGIyZTAwIi8+PHJlY3QgeD0iMjMiIHk9IjM4IiB3aWR0aD0iMTgiIGhlaWdodD0iMTEiIHJ4PSI1LjUiIGZpbGw9IiNmYjkyM2MiIHN0cm9rZT0iI2VhNTgwYyIgc3Ryb2tlLXdpZHRoPSIyIi8+PC9zdmc+Cg==">
-  
+
   <style>
     * { box-sizing: border-box; font-family: Arial, "Sarabun", sans-serif; }
     body { margin: 0; background: #f4f6f8; color: #222; }
@@ -79,11 +79,10 @@
     .popup-title { font-size:19px; font-weight:800; margin-bottom:8px; }
     .popup-msg { font-size:14px; color:#334155; white-space:pre-line; margin-bottom:18px; line-height:1.6; }
     @media (max-width:700px){ .form-grid{ grid-template-columns:1fr; } }
-    
+
     .summary-box { flex:1; min-width:120px; padding:12px 16px; border-radius:12px; text-align:center; }
     .summary-num { font-size:26px; font-weight:800; line-height:1.1; }
     .summary-label { font-size:13px; font-weight:600; margin-top:2px; }
-  
   </style>
 </head>
 <body>
@@ -116,11 +115,12 @@
             <button id="manageUsersBtn" class="btn-gray" style="display:none;" onclick="openUserModal()">จัดการผู้ใช้</button>
             <button id="auditBtn" class="btn-gray" style="display:none;" onclick="openAuditModal()">ประวัติ</button>
             <button id="addBtn" class="btn-blue" onclick="openAddModal()">+ เพิ่มข้อมูล</button>
-            <button class="btn-blue" onclick="loadAccounts()">รีเฟรช</button>
+            <button class="btn-blue" onclick="loadAccounts()" title="ซิงก์เฉพาะส่วนที่เปลี่ยน">ซิงก์</button>
+            <button class="btn-gray" onclick="forceReload()" title="ล้าง cache แล้วโหลดใหม่ทั้งหมด">↻ โหลดใหม่</button>
             <button class="btn-gray" onclick="doLogout()">ออกจากระบบ</button>
           </div>
         </div>
-        
+
         <div id="summaryBar" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
           <div class="summary-box" style="background:#e7f1ff; color:#084298;">
             <div class="summary-num" id="sumTotal">-</div>
@@ -250,15 +250,20 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvaWltcXJ0bG9sb29ucGVoaHdnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5MDkzNzcsImV4cCI6MjA5NzQ4NTM3N30.3ARGoW1KHIcLmvkrAwDd4wEAzuJ0HlKadCNsq3eBVxU';
     const LOGIN_DOMAIN = 'duck.local';
 
+    // คอลัมน์ที่ดึงจาก DB (ระบุชัด ไม่ใช้ * เพื่อลด egress)
+    const COLS = 'id,email,pass,use1,use2,use3,use4,use5,machine,contact,expire_date,status,credit,fill_date,apple_email,apple_pass,mail_birth,ios_verify,phone_owner,note,updated_at';
+    // cache key — เปลี่ยนเลขเวอร์ชันเมื่อ schema เปลี่ยน
+    const CACHE_KEY = 'duck_v1';
+
     const DROPDOWN_OPTIONS = { status: ['เติมโค้ดแล้ว', 'ยังไม่เติม', 'ติดต่อไม่ได้', 'ปิดย้าย'] };
     let machineOptions = [];
-    let userNameMap = {};   // { username: name } สำหรับ audit log
-    
+    let userNameMap = {};
+
     const GIFT_CARD_URL = 'https://chisumuxd.github.io/DuckApple/';
     function openGiftCard(){
-      window.open(GIFT_CARD_URL, 'https://chisumuxd.github.io/DuckApple/');   // เปิดแท็บใหม่
+      window.open(GIFT_CARD_URL, '_blank');
     }
-    
+
     function getOptionsFor(key){
       if(key === 'machine') return (machineOptions && machineOptions.length) ? machineOptions : null;
       return DROPDOWN_OPTIONS[key] || null;
@@ -302,7 +307,7 @@
       { key:'fill_date', header:'เติม Gift ล่าสุด', width:100},
       { key:'apple_email', header:'Email Apple ID', width:240},
       { key:'apple_pass', header:'Pass Apple ID', width:130},
-      { key:'mail_birth', header:'วันเกิดเมล',width:100},
+      { key:'mail_birth', header:'วันเกิดเมล', width:100},
       { key:'ios_verify', header:'เบอร์ยืนยัน IOS', width:120},
       { key:'phone_owner', header:'เจ้าของเบอร์', width:100},
       { key:'note', header:'หมายเหตุ', width:200}
@@ -324,6 +329,7 @@
     function setLoginError(m){ const el=document.getElementById('loginError'); if(!m){el.className='login-error';el.textContent='';return;} el.textContent=m; el.className='login-error show'; }
     function setStatus(m){ document.getElementById('statusMsg').textContent = m || ''; }
     function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
     function updateSummary(){
       const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
       let total=accountsRows.length, expired=0, empty=0;
@@ -344,6 +350,7 @@
       document.getElementById('popupIcon').textContent = type==='error'?'!':'✓';
       document.getElementById('popupTitle').textContent = title;
       document.getElementById('popupMsg').textContent = msg || '';
+      document.getElementById('popupMsg').style.whiteSpace = 'pre-line';
       popupCb = typeof cb==='function'?cb:null;
       document.getElementById('popupBackdrop').style.display='block';
     }
@@ -411,25 +418,95 @@
     async function doLogout(){ stopRealtime(); await sb.auth.signOut(); currentUser=null; accountsRows=[];
       document.getElementById('loginUsername').value=''; document.getElementById('loginPassword').value=''; showLogin(); }
 
+    // ===== CACHE + DELTA SYNC =====
+
+    function getMaxUpdatedAt(){
+      return accountsRows.reduce((m,r)=>((r.updated_at||'')>m ? r.updated_at : m), '1970-01-01T00:00:00Z');
+    }
+
+    function saveCache(lastSync){
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ rows: accountsRows, lastSync }));
+      } catch(e){ /* localStorage เต็ม — ข้ามไป */ }
+    }
+
     async function loadAccounts(){
-      setStatus('กำลังโหลดข้อมูล...');
+      setStatus('กำลังโหลด...');
+      let cache = null;
+      try { cache = JSON.parse(localStorage.getItem(CACHE_KEY)); } catch(e){}
+
+      if(cache && cache.rows && cache.lastSync){
+        accountsRows = cache.rows;
+        applySearch(); updateSummary();
+        setStatus('โหลดจาก cache แล้ว กำลังซิงก์...');
+        await deltaSync(cache.lastSync);
+      } else {
+        await fullLoad();
+      }
+    }
+
+    async function deltaSync(lastSync){
+      // ดึงเฉพาะแถวที่เปลี่ยนหลัง lastSync
+      const { data: changed, error } = await sb.from('accounts')
+        .select(COLS).gt('updated_at', lastSync).order('updated_at',{ascending:true});
+      if(error){ setStatus('ซิงก์ไม่สำเร็จ: '+error.message); return; }
+
+      // ดึง id ทั้งหมดเพื่อหาแถวที่ถูกลบ (ข้อมูลเล็กมาก)
+      const { data: ids } = await sb.from('accounts').select('id');
+
+      let newest = lastSync;
+      (changed||[]).forEach(n=>{
+        const i = accountsRows.findIndex(r=>r.id===n.id);
+        if(i>=0) accountsRows[i]=n; else accountsRows.push(n);
+        if((n.updated_at||'') > newest) newest = n.updated_at;
+      });
+
+      if(ids){
+        const liveSet = new Set(ids.map(r=>r.id));
+        accountsRows = accountsRows.filter(r=>liveSet.has(r.id));
+      }
+
+      accountsRows.sort((a,b)=>a.id-b.id);
+      saveCache(newest);
+      applySearch(); updateSummary();
+      const msg = (changed && changed.length > 0)
+        ? 'ซิงก์แล้ว '+changed.length+' รายการ'
+        : 'ข้อมูลทันสมัยแล้ว';
+      setStatus(msg+' (ทั้งหมด '+accountsRows.length+' แถว)');
+    }
+
+    async function fullLoad(){
       const PAGE=1000; let from=0; let all=[];
       while(true){
-        const { data, error } = await sb.from('accounts').select('*').order('id',{ascending:true}).range(from, from+PAGE-1);
-        if(error){ setStatus('โหลดข้อมูลไม่สำเร็จ: '+error.message); return; }
+        const { data, error } = await sb.from('accounts').select(COLS)
+          .order('id',{ascending:true}).range(from, from+PAGE-1);
+        if(error){ setStatus('โหลดไม่สำเร็จ: '+error.message); return; }
         all = all.concat(data||[]);
         if(!data || data.length < PAGE) break;
         from += PAGE; if(from > 100000) break;
       }
       accountsRows = all;
-      applySearch();
-      setStatus('โหลดข้อมูลแล้ว '+accountsRows.length+' แถว');
-      updateSummary();
-      syncExpiredStatus();
+      const hasUpdatedAt = all.length === 0 || 'updated_at' in all[0];
+      if(hasUpdatedAt){
+        saveCache(getMaxUpdatedAt());
+      } else {
+        // updated_at ยังไม่มีใน DB — ทำงานปกติแต่ไม่ cache
+        localStorage.removeItem(CACHE_KEY);
+        setStatus('⚠️ ยังไม่มีคอลัมน์ updated_at — กรุณารัน SQL ก่อน จะโหลดใหม่ทุกครั้ง');
+      }
+      applySearch(); updateSummary();
+      if(hasUpdatedAt) setStatus('โหลดข้อมูลแล้ว '+accountsRows.length+' แถว');
     }
 
-   // ชื่อที่ไม่ให้เป็นตัวเลือกเครื่อง (เช่น operator/admin)
-      const MACHINE_EXCLUDE = ['Nu'];   // เพิ่มชื่ออื่นได้ เช่น ['Nu','Admin']
+    async function forceReload(){
+      localStorage.removeItem(CACHE_KEY);
+      setStatus('ล้าง cache แล้ว กำลังโหลดใหม่...');
+      await fullLoad();
+    }
+
+    // ===== /CACHE =====
+
+    const MACHINE_EXCLUDE = ['Nu'];
 
     async function loadMachineOptions(){
       const { data, error } = await sb.from('user_profiles').select('username,name').order('name',{ascending:true});
@@ -437,7 +514,7 @@
       const set = new Set();
       (data||[]).forEach(u=>{
         const n = String(u.name||'').trim();
-        if(n && !MACHINE_EXCLUDE.includes(n)) set.add(n);   // ← กรองชื่อที่ไม่ต้องการออก
+        if(n && !MACHINE_EXCLUDE.includes(n)) set.add(n);
         if(u.username) userNameMap[u.username] = n || u.username;
       });
       machineOptions = Array.from(set);
@@ -452,7 +529,7 @@
       let selectedDate=null; if(dateStr){const p=dateStr.split('-'); selectedDate=new Date(+p[0],+p[1]-1,+p[2]);}
       const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
       const keywords=keyword?keyword.split(/\s+/).filter(Boolean):[];
-       const result=accountsRows.filter(row=>{
+      const result=accountsRows.filter(row=>{
         if(keywords.length>0){
           const ok=keywords.every(w=>{
             if(chkUseDate) return useMatchDate(row,w);
@@ -644,20 +721,27 @@
       const btn=document.getElementById('saveBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก...';
       let error;
       if(currentMode==='add'){
-        const res=await sb.from('accounts').insert(payload).select().single();
+        const res=await sb.from('accounts').insert(payload).select(COLS).single();
         error=res.error;
-        if(!error) await writeAudit('ADD', res.data.id, null, res.data);
+        if(!error){
+          await writeAudit('ADD', res.data.id, null, res.data);
+          accountsRows.push(res.data);
+          accountsRows.sort((a,b)=>a.id-b.id);
+          saveCache(getMaxUpdatedAt());
+        }
       } else {
         const oldRow=accountsRows.find(r=>r.id===editingId);
-        const res=await sb.from('accounts').update(payload).eq('id',editingId);
+        const res=await sb.from('accounts').update(payload).eq('id',editingId).select(COLS).single();
         error=res.error;
-        if(!error) await writeAudit('UPDATE', editingId, oldRow, payload);
+        if(!error){
+          await writeAudit('UPDATE', editingId, oldRow, res.data);
+          const i=accountsRows.findIndex(r=>r.id===editingId);
+          if(i>=0) accountsRows[i]=res.data;
+          saveCache(getMaxUpdatedAt());
+        }
       }
       btn.disabled=false; btn.textContent='บันทึก';
       if(error){ showModalAlert('บันทึกไม่สำเร็จ: '+error.message); return; }
-      // อัปเดต local
-      if(currentMode==='add'){ accountsRows.push(payload); accountsRows.sort((a,b)=>a.id-b.id); }
-      else { const i=accountsRows.findIndex(r=>r.id===editingId); if(i>=0) accountsRows[i]=Object.assign({},accountsRows[i],payload); }
       closeModal(); applySearch(); updateSummary();
       showPopup(currentMode==='add'?'เพิ่มข้อมูลสำเร็จ':'บันทึกสำเร็จ','ข้อมูลถูกบันทึกแล้ว','success');
     }
@@ -670,7 +754,8 @@
       const { error }=await sb.from('accounts').delete().eq('id',id);
       if(error){ showModalAlert('ลบไม่สำเร็จ: '+error.message); return; }
       await writeAudit('DELETE', id, oldRow, null);
-      accountsRows = accountsRows.filter(r=>r.id!==id);   // ลบ local
+      accountsRows = accountsRows.filter(r=>r.id!==id);
+      saveCache(getMaxUpdatedAt());
       closeModal(); applySearch(); updateSummary();
       showPopup('ลบสำเร็จ','ลบข้อมูล ID '+id+' แล้ว','success');
     }
@@ -770,13 +855,13 @@
           oldVal=DISPLAY_FIELDS.filter(f=>String(oldRow[f.key]||'').trim()).map(f=>f.header+'='+oldRow[f.key]).join(' | ');
         }
         await sb.from('audit_log').insert({
-          username: currentUser ? currentUser.username : '', 
+          username: currentUser ? currentUser.username : '',
           action, row_id: rowId || null,
           email: (newRow||oldRow||{}).email || '',
-          column_name: colName, 
-          old_value: oldVal, 
+          column_name: colName,
+          old_value: oldVal,
           new_value: newVal,
-          machine: (newRow||oldRow||{}).machine || '', 
+          machine: (newRow||oldRow||{}).machine || '',
           contact: (newRow||oldRow||{}).contact || ''
         });
       } catch(e){ console.log('audit error:', e); }
@@ -793,7 +878,6 @@
       (data||[]).forEach(r=>{
         const tr=document.createElement('tr');
         const ts=new Date(r.ts).toLocaleString('th-TH');
-        // ใช้ email จาก log ถ้ามี ไม่งั้น fallback หาจาก accountsRows หรือแสดง ID
         let emailLabel = r.email || '';
         if(!emailLabel && r.row_id){
           const acc = accountsRows.find(a=>String(a.id)===String(r.row_id));
@@ -819,12 +903,12 @@
         if(newValue===null) return;
         newValue = newValue.trim();
       }
-      
-        if(USE_KEYS.includes(key) && !isValidUseValue(newValue)){
+
+      if(USE_KEYS.includes(key) && !isValidUseValue(newValue)){
         showPopup('ใส่วันที่ด้วย', 'ช่อง '+header+' ต้องมีวันที่ต่อท้ายชื่อ\nเช่น "bestfortest 21/6/69"\n\n(ถ้าต้องการเว้นว่าง ให้ลบให้ว่าง หรือใส่คำว่า "ว่าง")', 'error');
         return;
-      } 
-      
+      }
+
       if(String(newValue)===String(oldValue).trim()) return;
       const payload={}; payload[key]=newValue;
       const oldRow = accountsRows.find(r=>r.id===row.id);
@@ -834,11 +918,10 @@
         const newRow = Object.assign({}, oldRow, payload);
         await writeAudit('UPDATE', row.id, oldRow, newRow);
       }
-      // อัปเดตเฉพาะแถวนี้ในหน่วยความจำ ไม่โหลดใหม่ทั้งหมด (ประหยัด egress)
       const idx = accountsRows.findIndex(r=>r.id===row.id);
       if(idx>=0) accountsRows[idx] = Object.assign({}, accountsRows[idx], payload);
-      applySearch();
-      updateSummary();
+      saveCache(getMaxUpdatedAt());
+      applySearch(); updateSummary();
       setStatus('แก้ไข '+header+' ของ ID '+row.id+' แล้ว');
     }
 
@@ -849,26 +932,26 @@
         .subscribe(s=>{ document.getElementById('liveDot').className=(s==='SUBSCRIBED')?'live-dot on':'live-dot'; });
     }
     function stopRealtime(){ if(realtimeChannel){ sb.removeChannel(realtimeChannel); realtimeChannel=null; } document.getElementById('liveDot').className='live-dot'; }
+
     function handleRealtime(payload){
       const { eventType, new:n, old:o }=payload;
       if(eventType==='INSERT') accountsRows.push(n);
       else if(eventType==='UPDATE'){ const i=accountsRows.findIndex(r=>r.id===n.id); if(i>=0) accountsRows[i]=n; else accountsRows.push(n); }
       else if(eventType==='DELETE') accountsRows=accountsRows.filter(r=>r.id!==o.id);
       accountsRows.sort((a,b)=>a.id-b.id);
-      applySearch();
-      updateSummary();
+      saveCache(getMaxUpdatedAt());
+      applySearch(); updateSummary();
     }
 
     function isEmptyUse(val){ const t=String(val||'').trim(); return t===''||t==='ว่าง'; }
     function rowHasEmptyHB(row){ return USE_KEYS.some(k => isEmptyUse(row[k])); }
 
-    // ตรวจช่อง Use: ถ้ามีชื่อ ต้องมีวันที่ท้าย — คืน true ถ้าผ่าน
     function isValidUseValue(val){
       const t = String(val||'').trim();
-      if(t === '' || t === 'ว่าง') return true;       // เว้นว่าง/ว่าง = ผ่าน
-      return extractDate(t) !== null;                  // มีข้อความ ต้องมีวันที่ที่อ่านได้
+      if(t === '' || t === 'ว่าง') return true;
+      return extractDate(t) !== null;
     }
-    
+
     function effectiveStatus(row){
       const cur = String(row.status||'').trim();
       const d = extractDate(row.expire_date);
@@ -885,7 +968,6 @@
       ctxField = field || null;
       const menu = document.getElementById('ctxMenu');
       menu.style.display = 'block';
-      // วางเมนูตรงตำแหน่งเมาส์ (กันล้นขอบจอ)
       const mw=150, mh=44;
       let x=e.clientX, y=e.clientY;
       if(x+mw > window.innerWidth) x = window.innerWidth - mw - 6;
@@ -895,8 +977,7 @@
     }
     function hideCtxMenu(){ document.getElementById('ctxMenu').style.display='none'; }
 
-    // ตั้งค่า event ตอนโหลดหน้า
-    document.addEventListener('click', hideCtxMenu);   // คลิกที่อื่น = ปิดเมนู
+    document.addEventListener('click', hideCtxMenu);
     document.addEventListener('scroll', hideCtxMenu, true);
     window.addEventListener('DOMContentLoaded', ()=>{
       const copyBtn = document.getElementById('ctxCopy');
@@ -907,69 +988,37 @@
           await navigator.clipboard.writeText(ctxValue);
           setStatus('คัดลอกแล้ว: ' + (ctxValue.length>40 ? ctxValue.slice(0,40)+'...' : ctxValue));
         } catch(err) {
-          // fallback ถ้า clipboard API ใช้ไม่ได้
           const ta=document.createElement('textarea'); ta.value=ctxValue; document.body.appendChild(ta);
           ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
           setStatus('คัดลอกแล้ว');
         }
         hideCtxMenu();
       };
-        const histBtn = document.getElementById('ctxHistory');
-          histBtn.onmouseover = ()=> histBtn.style.background='#eef';
-          histBtn.onmouseout  = ()=> histBtn.style.background='';
-          histBtn.onclick = async ()=>{
+      const histBtn = document.getElementById('ctxHistory');
+      histBtn.onmouseover = ()=> histBtn.style.background='#eef';
+      histBtn.onmouseout  = ()=> histBtn.style.background='';
+      histBtn.onclick = async ()=>{
         hideCtxMenu();
         if(!ctxRow || !ctxField){ return; }
         await showFieldHistory(ctxRow, ctxField);
       };
     });
-    
-    async function syncExpiredStatus(){
-      if(!canEdit()) return;
-      const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
-      const toUpdate = accountsRows.filter(row=>{
-        const d=extractDate(row.expire_date);
-        if(!d) return false;
-        if(d.getTime() > today.getTime()) return false;
-        return String(row.status||'').trim() !== 'ยังไม่เติม';
-      });
-      if(toUpdate.length===0) return;
-      for(const row of toUpdate){
-        const oldRow = Object.assign({}, row);
-        const { error } = await sb.from('accounts').update({ status:'ยังไม่เติม' }).eq('id', row.id);
-        if(!error) row.status = 'ยังไม่เติม';
-        if(!error && typeof writeAudit==='function'){
-          const newRow=Object.assign({}, oldRow, { status:'ยังไม่เติม' });
-          await writeAudit('UPDATE', row.id, oldRow, newRow);
-        }
-      }
-      setStatus('อัปเดตสถานะหมดอายุ '+toUpdate.length+' รายการแล้ว');
-      applySearch();
-      updateSummary();
-    }
-    
-      async function showFieldHistory(row, field){
+
+    async function showFieldHistory(row, field){
       if(!canEdit()){ showPopup('ไม่มีสิทธิ์','ดูประวัติได้เฉพาะ ADMIN/EDITOR','error'); return; }
       setStatus('กำลังโหลดประวัติ...');
-
-      // ดึง log ของแถวนี้ (row_id หรือ email) เรียงใหม่ล่าสุดก่อน
       const { data, error } = await sb.from('audit_log')
         .select('*')
         .or('row_id.eq.'+row.id+',email.eq.'+(row.email||'__none__'))
         .order('ts',{ascending:false})
         .limit(200);
-
       if(error){ showPopup('ผิดพลาด', error.message, 'error'); return; }
-
-      // กรองเฉพาะ log ที่แตะคอลัมน์นี้ (column_name มีชื่อหัวคอลัมน์นี้)
       const header = field.header;
       const rows = (data||[]).filter(r=>{
         if(!r.column_name) return false;
-        if(r.action==='ADD' || r.action==='DELETE') return true;   // เพิ่ม/ลบ แสดงด้วย
+        if(r.action==='ADD' || r.action==='DELETE') return true;
         return r.column_name.split(', ').includes(header);
       });
-
-      // สร้างข้อความประวัติ
       let html = '<div style="text-align:left; max-height:50vh; overflow:auto;">';
       html += '<div style="font-weight:800; color:#0f5132; margin-bottom:10px;">ประวัติช่อง "'+escapeHtml(header)+'" ('+escapeHtml(row.email||('ID '+row.id))+')</div>';
       if(rows.length===0){
@@ -978,7 +1027,6 @@
         rows.forEach(r=>{
           const ts=new Date(r.ts).toLocaleString('th-TH');
           const who=userNameMap[r.username]||r.username||'';
-          // ดึงเฉพาะค่าของคอลัมน์นี้จาก old/new (ที่เก็บแบบ "หัว=ค่า | หัว=ค่า")
           const oldV = pickColVal(r.old_value, header);
           const newV = pickColVal(r.new_value, header);
           let detail='';
@@ -992,8 +1040,6 @@
         });
       }
       html += '</div>';
-
-      // แสดงใน popup (ใช้ innerHTML)
       document.getElementById('popupIcon').className='popup-icon success';
       document.getElementById('popupIcon').textContent='🕒';
       document.getElementById('popupTitle').textContent='ประวัติการแก้ไข';
@@ -1004,7 +1050,6 @@
       setStatus('');
     }
 
-    // ดึงค่าของคอลัมน์ที่ต้องการ จากสตริง "หัว=ค่า | หัว=ค่า"
     function pickColVal(str, header){
       if(!str) return '';
       const parts = String(str).split(' | ');
@@ -1014,7 +1059,6 @@
       }
       return '';
     }
-    
   </script>
 </body>
 </html>
