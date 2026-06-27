@@ -648,7 +648,7 @@
       lastAutoSync = now;
       // กลับมาโฟกัส/ต่อเน็ตใหม่ = อาจพลาด event ลบ → ตรวจ id ด้วย
       // poll ปกติ = realtime ส่งการลบให้แล้ว → ข้าม id เพื่อประหยัด
-      const detectDeletes = (reason === 'visible' || reason === 'reconnect');
+      const detectDeletes = (reason === 'reconnect');
       await deltaSync(getMaxUpdatedAt(), { detectDeletes });
     }
 
