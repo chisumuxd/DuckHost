@@ -426,11 +426,25 @@
       return accountsRows.reduce((m,r)=>((r.updated_at||'')>m ? r.updated_at : m), '1970-01-01T00:00:00Z');
     }
 
+    // เซฟ cache แบบ debounce — รวบหลายการเปลี่ยนเป็นการเขียนครั้งเดียว
+    // กันการ JSON.stringify ทั้งก้อน (หลายพันแถว) ค้างหน้าจอตอนกดบันทึก
+    let cacheTimer = null, pendingLastSync = null;
     function saveCache(lastSync){
-      try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ rows: accountsRows, lastSync }));
-      } catch(e){ /* localStorage เต็ม — ข้ามไป */ }
+      pendingLastSync = lastSync;
+      if(cacheTimer) return;            // มีคิวเขียนอยู่แล้ว รอรอบเดียว
+      cacheTimer = setTimeout(flushCache, 1500);
     }
+    function flushCache(){
+      if(cacheTimer){ clearTimeout(cacheTimer); cacheTimer = null; }
+      if(pendingLastSync === null) return;
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ rows: accountsRows, lastSync: pendingLastSync }));
+      } catch(e){ /* localStorage เต็ม — ข้ามไป */ }
+      pendingLastSync = null;
+    }
+    // เขียน cache ที่ค้างอยู่ทันทีก่อนปิด/สลับแท็บ (กันตกหล่น)
+    window.addEventListener('pagehide', flushCache);
+    document.addEventListener('visibilitychange', ()=>{ if(document.hidden) flushCache(); });
 
     async function loadAccounts(){
       setStatus('กำลังโหลด...');
@@ -487,7 +501,7 @@
         applySearch(); updateSummary();
         const msg = (changed && changed.length > 0)
           ? 'ซิงก์แล้ว '+changed.length+' รายการ'
-          : 'ข้อมูลล่าสุดแล้ว';
+          : 'ข้อมูลทันสมัยแล้ว';
         setStatus(msg+' (ทั้งหมด '+accountsRows.length+' แถว)');
       } finally {
         syncing = false;
