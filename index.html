@@ -593,52 +593,59 @@
       }
     }
 
-    async function deltaSync(lastSync, opts){
-      opts = opts || {};
-      const detectDeletes = opts.detectDeletes !== false;  // ค่าเริ่มต้น = ตรวจการลบด้วย
-      if(syncing) return;                                  // กันซิงก์ซ้อนกัน
-      syncing = true;
-      try {
-        // ดึงเฉพาะแถวที่เปลี่ยนหลัง lastSync (แบ่งหน้า กัน limit 1000 ของ Supabase)
-        const PAGE=1000; let from=0; let changed=[];
-        while(true){
-          const { data, error } = await sb.from('accounts')
-            .select(COLS).gt('updated_at', lastSync)
-            .order('updated_at',{ascending:true}).order('id',{ascending:true})
-            .range(from, from+PAGE-1);
-          if(error){ setStatus('ซิงก์ไม่สำเร็จ: '+error.message); return; }
-          changed = changed.concat(data||[]);
-          if(!data || data.length < PAGE) break;
-          from += PAGE; if(from > 100000) break;
-        }
+  async function deltaSync(lastSync, opts){
+  opts = opts || {};
+  const detectDeletes = opts.detectDeletes !== false;
+  if(syncing) return;
+  syncing = true;
+  try {
+    // 1) ดึงเฉพาะแถวที่เปลี่ยนหลัง lastSync (เหมือนเดิม)
+    const PAGE=1000; let from=0; let changed=[];
+    while(true){
+      const { data, error } = await sb.from('accounts')
+        .select(COLS).gt('updated_at', lastSync)
+        .order('updated_at',{ascending:true}).order('id',{ascending:true})
+        .range(from, from+PAGE-1);
+      if(error){ setStatus('ซิงก์ไม่สำเร็จ: '+error.message); return; }
+      changed = changed.concat(data||[]);
+      if(!data || data.length < PAGE) break;
+      from += PAGE; if(from > 100000) break;
+    }
 
-        // ตรวจแถวที่ถูกลบ (ดึงเฉพาะ id) — ทำเมื่อจำเป็นเท่านั้นเพื่อประหยัด egress
-        // ระหว่าง realtime เชื่อมต่ออยู่ มันส่ง event ลบให้แล้ว จึงข้ามได้ตอน poll ปกติ
-        const ids = detectDeletes ? await fetchAllIds() : null;
+    // 2) apply insert/update ก่อน — หลังจากนี้ accountsRows = ทุกแถวที่ยังอยู่จริง + แถวที่ถูกลบแต่ยังค้างในเครื่อง
+    let newest = lastSync;
+    (changed||[]).forEach(n=>{
+      const i = accountsRows.findIndex(r=>r.id===n.id);
+      if(i>=0) accountsRows[i]=n; else accountsRows.push(n);
+      if((n.updated_at||'') > newest) newest = n.updated_at;
+    });
 
-        let newest = lastSync;
-        (changed||[]).forEach(n=>{
-          const i = accountsRows.findIndex(r=>r.id===n.id);
-          if(i>=0) accountsRows[i]=n; else accountsRows.push(n);
-          if((n.updated_at||'') > newest) newest = n.updated_at;
-        });
-
+    // 3) ตรวจการลบแบบประหยัด: เทียบจำนวนแถวก่อน (egress แค่ตัวเลข ไม่ดึง row)
+    //    count ตรง = ไม่มีลบค้าง → ข้ามการดึง id ทั้งตาราง
+    //    count ไม่ตรง → ค่อยดึง id มา reconcile
+    if(detectDeletes){
+      const { count, error } = await sb.from('accounts')
+        .select('id', { count:'exact', head:true });   // head:true = ไม่ส่ง body กลับมา
+      if(!error && count !== null && count !== accountsRows.length){
+        const ids = await fetchAllIds();
         if(ids){
           const liveSet = new Set(ids.map(r=>r.id));
           accountsRows = accountsRows.filter(r=>liveSet.has(r.id));
         }
-
-        accountsRows.sort((a,b)=>a.id-b.id);
-        saveCache(newest);
-        applySearch(); updateSummary();
-        const msg = (changed && changed.length > 0)
-          ? 'ซิงก์แล้ว '+changed.length+' รายการ'
-          : 'ข้อมูลอัปเดตล่าสุดแล้ว';
-        setStatus(msg+' (ทั้งหมด '+accountsRows.length+' แถว)');
-      } finally {
-        syncing = false;
       }
     }
+
+    accountsRows.sort((a,b)=>a.id-b.id);
+    saveCache(newest);
+    applySearch(); updateSummary();
+    const msg = (changed && changed.length > 0)
+      ? 'ซิงก์แล้ว '+changed.length+' รายการ'
+      : 'ข้อมูลทันสมัยแล้ว';
+    setStatus(msg+' (ทั้งหมด '+accountsRows.length+' แถว)');
+  } finally {
+    syncing = false;
+    }
+  }
 
     // ซิงก์อัตโนมัติ — เบาและประหยัด egress
     async function autoSync(reason){
