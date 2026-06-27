@@ -446,13 +446,21 @@
     }
 
     async function deltaSync(lastSync){
-      // ดึงเฉพาะแถวที่เปลี่ยนหลัง lastSync
-      const { data: changed, error } = await sb.from('accounts')
-        .select(COLS).gt('updated_at', lastSync).order('updated_at',{ascending:true});
-      if(error){ setStatus('ซิงก์ไม่สำเร็จ: '+error.message); return; }
+      // ดึงเฉพาะแถวที่เปลี่ยนหลัง lastSync (แบ่งหน้า กัน limit 1000 ของ Supabase)
+      const PAGE=1000; let from=0; let changed=[];
+      while(true){
+        const { data, error } = await sb.from('accounts')
+          .select(COLS).gt('updated_at', lastSync)
+          .order('updated_at',{ascending:true}).order('id',{ascending:true})
+          .range(from, from+PAGE-1);
+        if(error){ setStatus('ซิงก์ไม่สำเร็จ: '+error.message); return; }
+        changed = changed.concat(data||[]);
+        if(!data || data.length < PAGE) break;
+        from += PAGE; if(from > 100000) break;
+      }
 
-      // ดึง id ทั้งหมดเพื่อหาแถวที่ถูกลบ (ข้อมูลเล็กมาก)
-      const { data: ids } = await sb.from('accounts').select('id');
+      // ดึง id ทั้งหมดเพื่อหาแถวที่ถูกลบ (เฉพาะ id เล็กมาก แต่ต้องแบ่งหน้าเช่นกัน)
+      const ids = await fetchAllIds();
 
       let newest = lastSync;
       (changed||[]).forEach(n=>{
@@ -473,6 +481,19 @@
         ? 'ซิงก์แล้ว '+changed.length+' รายการ'
         : 'ข้อมูลทันสมัยแล้ว';
       setStatus(msg+' (ทั้งหมด '+accountsRows.length+' แถว)');
+    }
+
+    async function fetchAllIds(){
+      const PAGE=1000; let from=0; let all=[];
+      while(true){
+        const { data, error } = await sb.from('accounts').select('id')
+          .order('id',{ascending:true}).range(from, from+PAGE-1);
+        if(error) return null;   // error → คืน null เพื่อข้ามการลบ (ปลอดภัยกว่าลบผิด)
+        all = all.concat(data||[]);
+        if(!data || data.length < PAGE) break;
+        from += PAGE; if(from > 100000) break;
+      }
+      return all;
     }
 
     async function fullLoad(){
