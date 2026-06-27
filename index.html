@@ -56,6 +56,7 @@
     td.actions { white-space:nowrap; text-align:center; }
     td.actions button { padding:3px 8px; font-size:11px; }
     td[style*="background"] { font-weight:600; }
+    td.editable { cursor:pointer; }
     td.use-cell { white-space:normal !important; word-break:break-word; }
     td.machine-cell { white-space:normal !important; word-break:break-word; }
     .status-msg { margin-top:10px; font-size:13px; color:#666; min-height:18px; }
@@ -318,6 +319,8 @@
     let currentUser = null, accountsRows = [], realtimeChannel = null, isExpiredPage = false;
     let currentMode = 'edit', editingId = null, popupCb = null;
     let syncing = false, lastAutoSync = 0, autoSyncTimer = null;
+    const recentlySaved = new Map();   // id -> เวลาที่เราบันทึกเอง (กัน render ซ้ำตอน realtime เด้งกลับ)
+    function markSaved(id){ if(id!=null) recentlySaved.set(id, Date.now()); }
     const AUTO_SYNC_MIN_GAP = 15000;          // กันซิงก์ถี่เกิน (15 วิ)
     const AUTO_SYNC_INTERVAL = 5 * 60 * 1000; // ซิงก์สำรองทุก 5 นาที
 
@@ -412,7 +415,7 @@
       document.getElementById('manageUsersBtn').style.display = (currentUser.role==='ADMIN') ? 'inline-block' : 'none';
       document.getElementById('auditBtn').style.display = (currentUser.role==='ADMIN') ? 'inline-block' : 'none';
       await loadMachineOptions();
-      showApp(); await loadAccounts(); startRealtime(); startAutoSync();
+      showApp(); initTableHandlers(); await loadAccounts(); startRealtime(); startAutoSync();
     }
     function canEdit(){ return currentUser && (currentUser.role==='ADMIN' || currentUser.role==='EDITOR'); }
     function isAdmin(){ return currentUser && currentUser.role==='ADMIN'; }
@@ -657,16 +660,22 @@
 
       if(rows.length===0){ setStatus('ไม่พบข้อมูลที่ตรงกับคำค้นหา'); return; }
       const useTarget=(opts.chkUseDate&&opts.keyword)?extractDate(opts.keyword):null;
+      const editable = canEdit();
 
+      // ใช้ DocumentFragment + ไม่แปะ event handler รายช่อง (ใช้ delegation ที่ tbody แทน)
+      const frag = document.createDocumentFragment();
       rows.forEach((row, idx)=>{
         const tr=document.createElement('tr');
+        tr._row = row;   // เก็บอ้างอิงแถวไว้ให้ delegation ใช้
+
         const tdNo=document.createElement('td');
         tdNo.textContent = idx+1;
-        tdNo.style.width='50px'; tdNo.style.minWidth='50px'; tdNo.style.maxWidth='50px';
         tdNo.style.textAlign='center'; tdNo.style.color='#888';
         tr.appendChild(tdNo);
+
         DISPLAY_FIELDS.forEach(f=>{
           const td=document.createElement('td');
+          td.dataset.fkey = f.key;   // ให้ delegation รู้ว่าเป็นช่องอะไร
           let value=row[f.key]||'';
           if(useTarget&&USE_KEYS.includes(f.key)){ const d=extractDate(value); if(!d||d.getTime()!==useTarget.getTime()) value=''; }
           if(f.key==='status'){ value = effectiveStatus(row); }
@@ -679,32 +688,54 @@
             td.textContent=value;
           }
 
-          if(f.width){ td.style.width=f.width+'px'; td.style.minWidth=f.width+'px'; td.style.maxWidth=f.width+'px'; }
           if(USE_KEYS.includes(f.key)) td.classList.add('use-cell');
-          if(f.key==='machine') td.classList.add('machine-cell');
+          else if(f.key==='machine') td.classList.add('machine-cell');
+          if(editable) td.classList.add('editable');
 
-          if(f.dateUser) td.style.backgroundColor=dateColor(value,true);
-          else if(f.dateExpire) td.style.backgroundColor=dateColor(value,false);
+          if(f.dateUser){ const c=dateColor(value,true); if(c) td.style.backgroundColor=c; }
+          else if(f.dateExpire){ const c=dateColor(value,false); if(c) td.style.backgroundColor=c; }
 
-          if(canEdit()){
-            td.style.cursor='pointer';
-            td.title='ดับเบิลคลิกเพื่อแก้ไขช่องนี้';
-            td.ondblclick=()=>quickEditCell(row, f.key, f.header, row[f.key]||'');
-          }
-
-          td.oncontextmenu=(e)=>{ e.preventDefault(); showCtxMenu(e, row[f.key]||'', row, f); };
           tr.appendChild(td);
         });
+
         const tdAct=document.createElement('td'); tdAct.className='actions';
-        tdAct.style.width='80px'; tdAct.style.minWidth='80px'; tdAct.style.maxWidth='80px';
-        if(canEdit()){
+        if(editable){
           const b=document.createElement('button'); b.className='btn-yellow'; b.textContent='แก้ไข';
-          b.onclick=()=>openEditModal(row); tdAct.appendChild(b);
+          b.dataset.edit='1'; tdAct.appendChild(b);
         } else { tdAct.textContent='ดูเท่านั้น'; }
         tr.appendChild(tdAct);
-        tbody.appendChild(tr);
+        frag.appendChild(tr);
       });
+      tbody.appendChild(frag);
       setStatus('แสดง '+rows.length+' แถว');
+    }
+
+    // event delegation — แปะ handler ครั้งเดียวที่ tbody (แทนที่จะแปะทุกช่อง)
+    function initTableHandlers(){
+      const tbody=document.getElementById('tableBody');
+      if(tbody._delegated) return;
+      tbody._delegated = true;
+      const resolve=(target)=>{
+        const td=target.closest('td'); if(!td) return null;
+        const tr=td.closest('tr'); if(!tr||!tr._row) return null;
+        const key=td.dataset.fkey; if(!key) return null;
+        const f=DISPLAY_FIELDS.find(x=>x.key===key); if(!f) return null;
+        return { row:tr._row, key, f };
+      };
+      tbody.addEventListener('dblclick', e=>{
+        if(!canEdit()) return;
+        const r=resolve(e.target); if(!r) return;
+        quickEditCell(r.row, r.key, r.f.header, r.row[r.key]||'');
+      });
+      tbody.addEventListener('contextmenu', e=>{
+        const r=resolve(e.target); if(!r) return;
+        e.preventDefault();
+        showCtxMenu(e, r.row[r.key]||'', r.row, r.f);
+      });
+      tbody.addEventListener('click', e=>{
+        const btn=e.target.closest('button[data-edit]'); if(!btn) return;
+        const tr=btn.closest('tr'); if(tr&&tr._row) openEditModal(tr._row);
+      });
     }
 
     function dateColor(value,checkWaiting){
@@ -793,6 +824,7 @@
         const res=await sb.from('accounts').insert(payload).select(COLS).single();
         error=res.error;
         if(!error){
+          markSaved(res.data.id);
           await writeAudit('ADD', res.data.id, null, res.data);
           accountsRows.push(res.data);
           accountsRows.sort((a,b)=>a.id-b.id);
@@ -803,6 +835,7 @@
         const res=await sb.from('accounts').update(payload).eq('id',editingId).select(COLS).single();
         error=res.error;
         if(!error){
+          markSaved(editingId);
           await writeAudit('UPDATE', editingId, oldRow, res.data);
           const i=accountsRows.findIndex(r=>r.id===editingId);
           if(i>=0) accountsRows[i]=res.data;
@@ -822,6 +855,7 @@
       const oldRow=accountsRows.find(r=>r.id===id);
       const { error }=await sb.from('accounts').delete().eq('id',id);
       if(error){ showModalAlert('ลบไม่สำเร็จ: '+error.message); return; }
+      markSaved(id);
       await writeAudit('DELETE', id, oldRow, null);
       accountsRows = accountsRows.filter(r=>r.id!==id);
       saveCache(getMaxUpdatedAt());
@@ -983,6 +1017,7 @@
       const oldRow = accountsRows.find(r=>r.id===row.id);
       const { error } = await sb.from('accounts').update(payload).eq('id', row.id);
       if(error){ showPopup('แก้ไขไม่สำเร็จ', error.message, 'error'); return; }
+      markSaved(row.id);
       if(typeof writeAudit==='function' && oldRow){
         const newRow = Object.assign({}, oldRow, payload);
         await writeAudit('UPDATE', row.id, oldRow, newRow);
@@ -1011,11 +1046,17 @@
 
     function handleRealtime(payload){
       const { eventType, new:n, old:o }=payload;
+      const id = n ? n.id : (o ? o.id : null);
       if(eventType==='INSERT') accountsRows.push(n);
       else if(eventType==='UPDATE'){ const i=accountsRows.findIndex(r=>r.id===n.id); if(i>=0) accountsRows[i]=n; else accountsRows.push(n); }
       else if(eventType==='DELETE') accountsRows=accountsRows.filter(r=>r.id!==o.id);
       accountsRows.sort((a,b)=>a.id-b.id);
       saveCache(getMaxUpdatedAt());
+      // ถ้าเป็นการเปลี่ยนที่เราเพิ่งบันทึกเอง → ข้าม render (เพราะ render ไปแล้วตอนกดบันทึก)
+      if(id!=null && recentlySaved.has(id) && (Date.now()-recentlySaved.get(id) < 5000)){
+        recentlySaved.delete(id);
+        return;
+      }
       applySearch(); updateSummary();
     }
 
