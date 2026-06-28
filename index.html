@@ -317,6 +317,7 @@
       </div>
 
       <div class="card">
+        <div id="topScroll" style="overflow-x:auto; overflow-y:hidden; border:1px solid #b7b7b7; border-bottom:none; border-radius:6px 6px 0 0;"><div style="height:1px;"></div></div>
         <div class="table-wrap">
           <table><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table>
         </div>
@@ -1579,6 +1580,24 @@
       }
       return '';
     }
+
+    (function(){
+  function setup(){
+    const wrap=document.querySelector('.table-wrap');
+    const top=document.getElementById('topScroll');
+    if(!wrap||!top) return;
+    const table=wrap.querySelector('table');
+    const inner=top.firstElementChild;
+    const sync=()=>{ if(table) inner.style.width=table.scrollWidth+'px'; };
+    sync();
+    top.addEventListener('scroll', ()=>{ wrap.scrollLeft=top.scrollLeft; });
+    wrap.addEventListener('scroll', ()=>{ top.scrollLeft=wrap.scrollLeft; });
+    if(table && window.ResizeObserver) new ResizeObserver(sync).observe(table);
+    window.addEventListener('resize', sync);
+  }
+  if(document.readyState!=='loading') setup(); else document.addEventListener('DOMContentLoaded', setup);
+})();
+    
   </script>
 </body>
 </html>
