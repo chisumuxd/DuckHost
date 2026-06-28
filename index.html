@@ -58,7 +58,7 @@
     td[style*="background"] { font-weight:600; }
     td.editable { cursor:pointer; }
     td.use-cell { white-space:normal !important; word-break:break-word; }
-    td.machine-cell { white-space:normal !important; word-break:break-word; }
+     td.machine-cell { white-space:nowrap !important; overflow:hidden; text-overflow:ellipsis; }
     .status-msg { margin-top:10px; font-size:13px; color:#666; min-height:18px; }
 
     .modal-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:50; padding:20px; overflow-y:auto; }
@@ -426,11 +426,11 @@
     // สร้าง HTML ช่อง Use แบบ "ป้ายร้าน + ชื่อ" บรรทัดบน, วันที่บรรทัดล่าง
     function useCellHtml(value){
       const { store, name:head, date } = parseUseValue(value);
-      let html = '<div style="display:flex;align-items:center;gap:3px;flex-wrap:wrap;line-height:1.25;">';
-      if(store){ const bg=storeColor(store); html += '<span style="background:'+bg+';color:'+readableText(bg)+';font-size:9px;font-weight:bold;padding:1px 5px;border-radius:8px;">'+escapeHtml(store)+'</span>'; }
-      if(head)  html += '<span style="font-weight:bold;">'+escapeHtml(head)+'</span>';
+      let html = '<div style="display:flex;align-items:center;gap:3px;flex-wrap:nowrap;line-height:1.25;overflow:hidden;">';
+      if(store){ const bg=storeColor(store); html += '<span style="flex:none;background:'+bg+';color:'+readableText(bg)+';font-size:9px;font-weight:bold;padding:1px 5px;border-radius:8px;">'+escapeHtml(store)+'</span>'; }
+      if(head)  html += '<span style="font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">'+escapeHtml(head)+'</span>';
       html += '</div>';
-      if(date)  html += '<div style="font-size:11px;color:rgba(0,0,0,0.6);line-height:1.2;">('+escapeHtml(date)+')</div>';
+      if(date)  html += '<div style="font-size:11px;color:rgba(0,0,0,0.6);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">('+escapeHtml(date)+')</div>';
       return html;
     }
 
