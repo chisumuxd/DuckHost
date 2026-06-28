@@ -739,9 +739,14 @@
 
       // หน้าแรกว่าง — แสดงข้อมูลก็ต่อเมื่อมีการค้นหา/กรองที่ยืนได้ด้วยตัวเอง
       // (chkUseDate / chkMachine เป็นแค่ตัวปรับการค้นหา ต้องมีคำค้นด้วยถึงจะนับ)
+      // ตัวกรอง/คำค้นเปลี่ยนไหม → ถ้าเปลี่ยน = ค้นหาใหม่ ค่อยเด้งขึ้นบน
+      const filterSig = JSON.stringify([keyword, dateStr, chkMachine, chkUseDate, chkEmptyHB, isExpiredPage]);
+      const resetScroll = (filterSig !== lastFilterSig);
+      lastFilterSig = filterSig;
+
       const hasFilter = !!(keyword || dateStr || chkEmptyHB || isExpiredPage);
       if(!hasFilter){
-        renderTable(accountsRows, {});   // แสดงทั้งหมด — เบาเพราะ virtual scroll
+        renderTable(accountsRows, { resetScroll });   // แสดงทั้งหมด — เบาเพราะ virtual scroll
         return;
       }
 
@@ -761,7 +766,7 @@
         return true;
       });
       if(isExpiredPage) result.sort((a,b)=>{const da=extractDate(a.expire_date),db=extractDate(b.expire_date);return (da?da.getTime():0)-(db?db.getTime():0);});
-      renderTable(result,{chkUseDate,keyword});
+      renderTable(result,{chkUseDate,keyword,resetScroll});
     }
 
     function rowSearchText(row){ return FORM_FIELDS.map(f=>row[f.key]||'').join(' ').toLowerCase(); }
@@ -791,6 +796,7 @@
     const ROW_H = 42;   // ความสูงต่อแถว = ตรงกับ CSS (height:42px)
     const VBUF  = 8;    // วาดเผื่อบน/ล่าง กันขอบว่างตอนสกรอลล์เร็ว
     let vRows = [], vCtx = null, vScrollBound = false, vLastStart = -1, vLastEnd = -1;
+    let lastFilterSig = null;   // ลายเซ็นตัวกรองล่าสุด — ใช้ตัดสินว่าจะเด้งขึ้นบนไหม
 
     function vGetWrap(){ const tb=document.getElementById('tableBody'); return tb ? tb.closest('.table-wrap') : null; }
 
@@ -901,7 +907,8 @@
       };
 
       bindVScroll();
-      const wrap = vGetWrap(); if(wrap) wrap.scrollTop = 0;   // ผลค้นหาใหม่ = เด้งขึ้นบนสุด
+      const wrap = vGetWrap();
+      if(opts.resetScroll && wrap) wrap.scrollTop = 0;   // เด้งขึ้นบนเฉพาะตอนค้นหา/เปลี่ยนตัวกรองใหม่
       renderWindow();
       setStatus('แสดง '+rows.length+' แถว');
     }
