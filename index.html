@@ -283,18 +283,21 @@
         </div>
 
       <style>
-      .topbar-left{ flex:0 1 auto !important; min-width:0 !important; }   /* เลิกกินพื้นที่ทั้งหมด */
-      #duckPond{
-      flex:1 1 160px; min-width:140px; align-self:center;
-      position:relative; height:54px; overflow:hidden; border-radius:12px; margin:0;
-      background:
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 70' width='240' height='70'%3E%3Crect x='40' y='40' width='6' height='26' fill='%237a4a1e'/%3E%3Ccircle cx='43' cy='28' r='17' fill='%233f9d4f'/%3E%3Ccircle cx='30' cy='36' r='11' fill='%234fb866'/%3E%3Ccircle cx='56' cy='36' r='11' fill='%234fb866'/%3E%3Ccircle cx='43' cy='20' r='11' fill='%2357c46f'/%3E%3Crect x='117' y='46' width='6' height='20' fill='%23654321'/%3E%3Cpolygon points='120,8 104,34 136,34' fill='%232f8f43'/%3E%3Cpolygon points='120,20 102,46 138,46' fill='%23379a4d'/%3E%3Cpolygon points='120,30 100,56 140,56' fill='%233f9d4f'/%3E%3Crect x='196' y='48' width='5' height='18' fill='%237a4a1e'/%3E%3Ccircle cx='198' cy='42' r='12' fill='%234caf5e'/%3E%3Ccircle cx='189' cy='48' r='8' fill='%2357c46f'/%3E%3Ccircle cx='207' cy='48' r='8' fill='%2357c46f'/%3E%3C/svg%3E") repeat-x left top / 130px 38px,
-      linear-gradient(to bottom, #cdeafe 0, #cdeafe 30px, #6cb7e8 30px, #3f8fd0 100%);
-    }
-      #duckPond .pduck{ position:absolute; animation: pdSwim ease-in-out infinite; }
-      #duckPond .pbody{ position:relative; animation: pdBob 1.7s ease-in-out infinite; }
-      #duckPond .pbody svg{ display:block; animation: pdFlip ease-in-out infinite; }
-      #duckPond .prip{ position:absolute; left:50%; bottom:-4px; width:46px; height:8px; margin-left:-23px; border-radius:50%; background:rgba(255,255,255,.5); animation: pdRip 1.7s ease-in-out infinite; }
+      .topbar{ flex-wrap:nowrap !important; }                       /* กันตกบรรทัด */
+      .topbar-left{ flex:0 0 auto !important; min-width:0 !important; }
+      .topbar-actions{ flex:0 0 auto; }
+        #duckPond{
+          flex:1 1 auto; margin:0 12px; align-self:center;            /* ← ยืดเต็มช่องกลาง */
+          position:relative; height:52px; overflow:hidden; border-radius:12px;
+            background:
+            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 70' width='240' height='70'%3E%3Crect x='40' y='40' width='6' height='26' fill='%237a4a1e'/%3E%3Ccircle cx='43' cy='28' r='17' fill='%233f9d4f'/%3E%3Ccircle cx='30' cy='36' r='11' fill='%234fb866'/%3E%3Ccircle cx='56' cy='36' r='11' fill='%234fb866'/%3E%3Ccircle cx='43' cy='20' r='11' fill='%2357c46f'/%3E%3Crect x='117' y='46' width='6' height='20' fill='%23654321'/%3E%3Cpolygon points='120,8 104,34 136,34' fill='%232f8f43'/%3E%3Cpolygon points='120,20 102,46 138,46' fill='%23379a4d'/%3E%3Cpolygon points='120,30 100,56 140,56' fill='%233f9d4f'/%3E%3Crect x='196' y='48' width='5' height='18' fill='%237a4a1e'/%3E%3Ccircle cx='198' cy='42' r='12' fill='%234caf5e'/%3E%3Ccircle cx='189' cy='48' r='8' fill='%2357c46f'/%3E%3Ccircle cx='207' cy='48' r='8' fill='%2357c46f'/%3E%3C/svg%3E") repeat-x left top / 120px 36px,
+            linear-gradient(to bottom, #cdeafe 0, #cdeafe 28px, #6cb7e8 28px, #3f8fd0 100%);
+    
+      }
+        #duckPond .pduck{ position:absolute; animation: pdSwim ease-in-out infinite; }
+        #duckPond .pbody{ position:relative; animation: pdBob 1.7s ease-in-out infinite; }
+        #duckPond .pbody svg{ display:block; animation: pdFlip ease-in-out infinite; }
+        #duckPond .prip{ position:absolute; left:50%; bottom:-4px; width:46px; height:8px; margin-left:-23px; border-radius:50%; background:rgba(255,255,255,.5); animation: pdRip 1.7s ease-in-out infinite; }
         /* แยก property กันชนกัน: pduck=translate, pbody=rotate+translate, svg=scale */
         @keyframes pdSwim{ 0%{translate:calc(var(--x)*-1) 0;} 50%{translate:var(--x) 0;} 100%{translate:calc(var(--x)*-1) 0;} }
         @keyframes pdBob{ 0%,100%{translate:0 0; rotate:-2deg;} 50%{translate:0 -3px; rotate:2deg;} }
@@ -310,11 +313,14 @@
         const DUCK=`<svg viewBox="0 0 70 50" width="50" height="36" xmlns="http://www.w3.org/2000/svg"><path d="M8 26 Q2 22 4 30 Q8 30 12 30 Z" fill="#f7c948"/><ellipse cx="28" cy="28" rx="19" ry="13" fill="#ffd43b"/><ellipse cx="26" cy="27" rx="9" ry="6" fill="#f7c948"/><circle cx="48" cy="16" r="9" fill="#ffd43b"/><path d="M56 13 L67 15 L67 18.5 L56 19.5 Z" fill="#fb923c" stroke="#ea580c" stroke-width="1"/><circle cx="50" cy="14" r="1.7" fill="#4b2e00"/></svg>`;
         // [left%, bottomPx, scale, travelPx, durSec, delaySec, opacity]
         const ducks=[
-        [4,  5, .55, 42, 7,  0,    1],
-        [40, 8, .42, 32, 9, -3,  .85],
-        [66, 2, .62, 50, 6, -1.5,  1],
-        [86,10, .38, 26,10, -5,   .8],
-      ];
+        [3,  6, .55, 60, 8,  0,    1],
+        [18, 9, .40, 40,10, -3,  .85],
+        [33, 3, .62, 70, 6, -1.5,  1],
+        [48,10, .38, 35,11, -5,   .8],
+        [63, 5, .50, 55, 7, -2,  .95],
+        [80, 8, .45, 45, 9, -6,  .85],
+    
+        ];
         pond.innerHTML = ducks.map(d=>`
     <div class="pduck" style="left:${d[0]}%; bottom:${d[1]}px; --x:${d[3]}px; animation-duration:${d[4]}s; animation-delay:${d[5]}s;">
       <div class="pbody" style="opacity:${d[6]}; animation-delay:${d[5]}s;">
