@@ -788,10 +788,357 @@
       applySearch();
     }
 
+    // ===== VIRTUAL SCROLL (วาดเฉพาะแถวที่มองเห็น) =====
+    const ROW_H = 42;   // ความสูงต่อแถว = ตรงกับ CSS (height:42px)
+    const VBUF  = 8;    // วาดเผื่อบน/ล่าง กันขอบว่างตอนสกรอลล์เร็ว
+    let vRows = [], vCtx = null, vScrollBound = false, vLastStart = -1, vLastEnd = -1;
+
+    function vGetWrap(){ const tb=document.getElementById('tableBody'); return tb ? tb.closest('.table-wrap') : null; }
+
+    function bindVScroll(){
+      const wrap = vGetWrap();
+      if(!wrap || vScrollBound) return;
+      vScrollBound = true;
+      let ticking = false;
+      wrap.addEventListener('scroll', ()=>{
+        if(ticking) return; ticking = true;
+        requestAnimationFrame(()=>{ ticking=false; renderWindow(); });
+      });
+      window.addEventListener('resize', ()=>{ if(vRows.length) renderWindow(); });
+    }
+
+    function buildVRow(row, idx){
+      const { useTarget, editable } = vCtx;
+      const tr=document.createElement('tr');
+      tr._row = row;
+
+      const tdNo=document.createElement('td');
+      tdNo.textContent = idx+1;
+      tdNo.style.textAlign='center'; tdNo.style.color='#888';
+      tr.appendChild(tdNo);
+
+      DISPLAY_FIELDS.forEach(f=>{
+        const td=document.createElement('td');
+        td.dataset.fkey = f.key;
+        let value=row[f.key]||'';
+        if(useTarget&&USE_KEYS.includes(f.key)){ const d=extractDate(value); if(!d||d.getTime()!==useTarget.getTime()) value=''; }
+        if(f.key==='status'){ value = effectiveStatus(row); }
+        if(USE_KEYS.includes(f.key) && value){ td.innerHTML = useCellHtml(value); }
+        else { td.textContent=value; }
+        if(USE_KEYS.includes(f.key)) td.classList.add('use-cell');
+        else if(f.key==='machine') td.classList.add('machine-cell');
+        if(editable) td.classList.add('editable');
+        if(f.dateUser){ const c=dateColor(value,true); if(c) td.style.backgroundColor=c; }
+        else if(f.dateExpire){ const c=dateColor(value,false); if(c) td.style.backgroundColor=c; }
+        tr.appendChild(td);
+      });
+
+      const tdAct=document.createElement('td'); tdAct.className='actions';
+      if(editable){
+        const b=document.createElement('button'); b.className='btn-yellow'; b.textContent='แก้ไข';
+        b.dataset.edit='1'; tdAct.appendChild(b);
+      } else { tdAct.textContent='ดูเท่านั้น'; }
+      tr.appendChild(tdAct);
+      return tr;
+    }
+
+    // แถวช่องว่าง (spacer) ต้อง override กฎ td เดิม (height/max-height:42px) ไม่งั้นสูงผิด
+    function spacerRow(h){
+      const tr=document.createElement('tr');
+      const td=document.createElement('td');
+      td.colSpan = vCtx.colCount;
+      td.style.cssText = 'padding:0;border:none;line-height:0;height:'+h+'px;max-height:none;min-height:0;';
+      tr.appendChild(td);
+      return tr;
+    }
+
+    function renderWindow(){
+      const wrap = vGetWrap(), tbody=document.getElementById('tableBody');
+      if(!wrap || !vCtx || !tbody) return;
+      const total = vRows.length;
+      if(total === 0) return;
+
+      let start = Math.floor(wrap.scrollTop / ROW_H) - VBUF;
+      if(start < 0) start = 0;
+      let end = start + Math.ceil(wrap.clientHeight / ROW_H) + VBUF*2;
+      if(end > total) end = total;
+      if(start === vLastStart && end === vLastEnd) return;   // หน้าต่างเดิม ไม่ต้องวาดซ้ำ
+      vLastStart = start; vLastEnd = end;
+
+      const frag = document.createDocumentFragment();
+      frag.appendChild(spacerRow(start * ROW_H));                  // ดันด้วยที่ว่างด้านบน
+      for(let i=start; i<end; i++) frag.appendChild(buildVRow(vRows[i], i));
+      frag.appendChild(spacerRow((total - end) * ROW_H));         // เผื่อความสูงด้านล่าง
+
+      tbody.innerHTML = '';
+      tbody.appendChild(frag);
+    }
+
+    // ===== VIRTUAL SCROLL (วาดเฉพาะแถวที่มองเห็น) =====
+    const ROW_H = 42;   // ความสูงต่อแถว = ตรงกับ CSS (height:42px)
+    const VBUF  = 8;    // วาดเผื่อบน/ล่าง กันขอบว่างตอนสกรอลล์เร็ว
+    let vRows = [], vCtx = null, vScrollBound = false, vLastStart = -1, vLastEnd = -1;
+
+    function vGetWrap(){ const tb=document.getElementById('tableBody'); return tb ? tb.closest('.table-wrap') : null; }
+
+    function bindVScroll(){
+      const wrap = vGetWrap();
+      if(!wrap || vScrollBound) return;
+      vScrollBound = true;
+      let ticking = false;
+      wrap.addEventListener('scroll', ()=>{
+        if(ticking) return; ticking = true;
+        requestAnimationFrame(()=>{ ticking=false; renderWindow(); });
+      });
+      window.addEventListener('resize', ()=>{ if(vRows.length) renderWindow(); });
+    }
+
+    function buildVRow(row, idx){
+      const { useTarget, editable } = vCtx;
+      const tr=document.createElement('tr');
+      tr._row = row;
+
+      const tdNo=document.createElement('td');
+      tdNo.textContent = idx+1;
+      tdNo.style.textAlign='center'; tdNo.style.color='#888';
+      tr.appendChild(tdNo);
+
+      DISPLAY_FIELDS.forEach(f=>{
+        const td=document.createElement('td');
+        td.dataset.fkey = f.key;
+        let value=row[f.key]||'';
+        if(useTarget&&USE_KEYS.includes(f.key)){ const d=extractDate(value); if(!d||d.getTime()!==useTarget.getTime()) value=''; }
+        if(f.key==='status'){ value = effectiveStatus(row); }
+        if(USE_KEYS.includes(f.key) && value){ td.innerHTML = useCellHtml(value); }
+        else { td.textContent=value; }
+        if(USE_KEYS.includes(f.key)) td.classList.add('use-cell');
+        else if(f.key==='machine') td.classList.add('machine-cell');
+        if(editable) td.classList.add('editable');
+        if(f.dateUser){ const c=dateColor(value,true); if(c) td.style.backgroundColor=c; }
+        else if(f.dateExpire){ const c=dateColor(value,false); if(c) td.style.backgroundColor=c; }
+        tr.appendChild(td);
+      });
+
+      const tdAct=document.createElement('td'); tdAct.className='actions';
+      if(editable){
+        const b=document.createElement('button'); b.className='btn-yellow'; b.textContent='แก้ไข';
+        b.dataset.edit='1'; tdAct.appendChild(b);
+      } else { tdAct.textContent='ดูเท่านั้น'; }
+      tr.appendChild(tdAct);
+      return tr;
+    }
+
+    // แถวช่องว่าง (spacer) ต้อง override กฎ td เดิม (height/max-height:42px) ไม่งั้นสูงผิด
+    function spacerRow(h){
+      const tr=document.createElement('tr');
+      const td=document.createElement('td');
+      td.colSpan = vCtx.colCount;
+      td.style.cssText = 'padding:0;border:none;line-height:0;height:'+h+'px;max-height:none;min-height:0;';
+      tr.appendChild(td);
+      return tr;
+    }
+
+    function renderWindow(){
+      const wrap = vGetWrap(), tbody=document.getElementById('tableBody');
+      if(!wrap || !vCtx || !tbody) return;
+      const total = vRows.length;
+      if(total === 0) return;
+
+      let start = Math.floor(wrap.scrollTop / ROW_H) - VBUF;
+      if(start < 0) start = 0;
+      let end = start + Math.ceil(wrap.clientHeight / ROW_H) + VBUF*2;
+      if(end > total) end = total;
+      if(start === vLastStart && end === vLastEnd) return;   // หน้าต่างเดิม ไม่ต้องวาดซ้ำ
+      vLastStart = start; vLastEnd = end;
+
+      const frag = document.createDocumentFragment();
+      frag.appendChild(spacerRow(start * ROW_H));                  // ดันด้วยที่ว่างด้านบน
+      for(let i=start; i<end; i++) frag.appendChild(buildVRow(vRows[i], i));
+      frag.appendChild(spacerRow((total - end) * ROW_H));         // เผื่อความสูงด้านล่าง
+
+      tbody.innerHTML = '';
+      tbody.appendChild(frag);
+    }
+
+    // ===== VIRTUAL SCROLL (วาดเฉพาะแถวที่มองเห็น) =====
+    const ROW_H = 42;   // ความสูงต่อแถว = ตรงกับ CSS (height:42px)
+    const VBUF  = 8;    // วาดเผื่อบน/ล่าง กันขอบว่างตอนสกรอลล์เร็ว
+    let vRows = [], vCtx = null, vScrollBound = false, vLastStart = -1, vLastEnd = -1;
+
+    function vGetWrap(){ const tb=document.getElementById('tableBody'); return tb ? tb.closest('.table-wrap') : null; }
+
+    function bindVScroll(){
+      const wrap = vGetWrap();
+      if(!wrap || vScrollBound) return;
+      vScrollBound = true;
+      let ticking = false;
+      wrap.addEventListener('scroll', ()=>{
+        if(ticking) return; ticking = true;
+        requestAnimationFrame(()=>{ ticking=false; renderWindow(); });
+      });
+      window.addEventListener('resize', ()=>{ if(vRows.length) renderWindow(); });
+    }
+
+    function buildVRow(row, idx){
+      const { useTarget, editable } = vCtx;
+      const tr=document.createElement('tr');
+      tr._row = row;
+
+      const tdNo=document.createElement('td');
+      tdNo.textContent = idx+1;
+      tdNo.style.textAlign='center'; tdNo.style.color='#888';
+      tr.appendChild(tdNo);
+
+      DISPLAY_FIELDS.forEach(f=>{
+        const td=document.createElement('td');
+        td.dataset.fkey = f.key;
+        let value=row[f.key]||'';
+        if(useTarget&&USE_KEYS.includes(f.key)){ const d=extractDate(value); if(!d||d.getTime()!==useTarget.getTime()) value=''; }
+        if(f.key==='status'){ value = effectiveStatus(row); }
+        if(USE_KEYS.includes(f.key) && value){ td.innerHTML = useCellHtml(value); }
+        else { td.textContent=value; }
+        if(USE_KEYS.includes(f.key)) td.classList.add('use-cell');
+        else if(f.key==='machine') td.classList.add('machine-cell');
+        if(editable) td.classList.add('editable');
+        if(f.dateUser){ const c=dateColor(value,true); if(c) td.style.backgroundColor=c; }
+        else if(f.dateExpire){ const c=dateColor(value,false); if(c) td.style.backgroundColor=c; }
+        tr.appendChild(td);
+      });
+
+      const tdAct=document.createElement('td'); tdAct.className='actions';
+      if(editable){
+        const b=document.createElement('button'); b.className='btn-yellow'; b.textContent='แก้ไข';
+        b.dataset.edit='1'; tdAct.appendChild(b);
+      } else { tdAct.textContent='ดูเท่านั้น'; }
+      tr.appendChild(tdAct);
+      return tr;
+    }
+
+    // แถวช่องว่าง (spacer) ต้อง override กฎ td เดิม (height/max-height:42px) ไม่งั้นสูงผิด
+    function spacerRow(h){
+      const tr=document.createElement('tr');
+      const td=document.createElement('td');
+      td.colSpan = vCtx.colCount;
+      td.style.cssText = 'padding:0;border:none;line-height:0;height:'+h+'px;max-height:none;min-height:0;';
+      tr.appendChild(td);
+      return tr;
+    }
+
+    function renderWindow(){
+      const wrap = vGetWrap(), tbody=document.getElementById('tableBody');
+      if(!wrap || !vCtx || !tbody) return;
+      const total = vRows.length;
+      if(total === 0) return;
+
+      let start = Math.floor(wrap.scrollTop / ROW_H) - VBUF;
+      if(start < 0) start = 0;
+      let end = start + Math.ceil(wrap.clientHeight / ROW_H) + VBUF*2;
+      if(end > total) end = total;
+      if(start === vLastStart && end === vLastEnd) return;   // หน้าต่างเดิม ไม่ต้องวาดซ้ำ
+      vLastStart = start; vLastEnd = end;
+
+      const frag = document.createDocumentFragment();
+      frag.appendChild(spacerRow(start * ROW_H));                  // ดันด้วยที่ว่างด้านบน
+      for(let i=start; i<end; i++) frag.appendChild(buildVRow(vRows[i], i));
+      frag.appendChild(spacerRow((total - end) * ROW_H));         // เผื่อความสูงด้านล่าง
+
+      tbody.innerHTML = '';
+      tbody.appendChild(frag);
+    }
+
+    // ===== VIRTUAL SCROLL (วาดเฉพาะแถวที่มองเห็น) =====
+    const ROW_H = 42;   // ความสูงต่อแถว = ตรงกับ CSS (height:42px)
+    const VBUF  = 8;    // วาดเผื่อบน/ล่าง กันขอบว่างตอนสกรอลล์เร็ว
+    let vRows = [], vCtx = null, vScrollBound = false, vLastStart = -1, vLastEnd = -1;
+
+    function vGetWrap(){ const tb=document.getElementById('tableBody'); return tb ? tb.closest('.table-wrap') : null; }
+
+    function bindVScroll(){
+      const wrap = vGetWrap();
+      if(!wrap || vScrollBound) return;
+      vScrollBound = true;
+      let ticking = false;
+      wrap.addEventListener('scroll', ()=>{
+        if(ticking) return; ticking = true;
+        requestAnimationFrame(()=>{ ticking=false; renderWindow(); });
+      });
+      window.addEventListener('resize', ()=>{ if(vRows.length) renderWindow(); });
+    }
+
+    function buildVRow(row, idx){
+      const { useTarget, editable } = vCtx;
+      const tr=document.createElement('tr');
+      tr._row = row;
+
+      const tdNo=document.createElement('td');
+      tdNo.textContent = idx+1;
+      tdNo.style.textAlign='center'; tdNo.style.color='#888';
+      tr.appendChild(tdNo);
+
+      DISPLAY_FIELDS.forEach(f=>{
+        const td=document.createElement('td');
+        td.dataset.fkey = f.key;
+        let value=row[f.key]||'';
+        if(useTarget&&USE_KEYS.includes(f.key)){ const d=extractDate(value); if(!d||d.getTime()!==useTarget.getTime()) value=''; }
+        if(f.key==='status'){ value = effectiveStatus(row); }
+        if(USE_KEYS.includes(f.key) && value){ td.innerHTML = useCellHtml(value); }
+        else { td.textContent=value; }
+        if(USE_KEYS.includes(f.key)) td.classList.add('use-cell');
+        else if(f.key==='machine') td.classList.add('machine-cell');
+        if(editable) td.classList.add('editable');
+        if(f.dateUser){ const c=dateColor(value,true); if(c) td.style.backgroundColor=c; }
+        else if(f.dateExpire){ const c=dateColor(value,false); if(c) td.style.backgroundColor=c; }
+        tr.appendChild(td);
+      });
+
+      const tdAct=document.createElement('td'); tdAct.className='actions';
+      if(editable){
+        const b=document.createElement('button'); b.className='btn-yellow'; b.textContent='แก้ไข';
+        b.dataset.edit='1'; tdAct.appendChild(b);
+      } else { tdAct.textContent='ดูเท่านั้น'; }
+      tr.appendChild(tdAct);
+      return tr;
+    }
+
+    // แถวช่องว่าง (spacer) ต้อง override กฎ td เดิม (height/max-height:42px) ไม่งั้นสูงผิด
+    function spacerRow(h){
+      const tr=document.createElement('tr');
+      const td=document.createElement('td');
+      td.colSpan = vCtx.colCount;
+      td.style.cssText = 'padding:0;border:none;line-height:0;height:'+h+'px;max-height:none;min-height:0;';
+      tr.appendChild(td);
+      return tr;
+    }
+
+    function renderWindow(){
+      const wrap = vGetWrap(), tbody=document.getElementById('tableBody');
+      if(!wrap || !vCtx || !tbody) return;
+      const total = vRows.length;
+      if(total === 0) return;
+
+      let start = Math.floor(wrap.scrollTop / ROW_H) - VBUF;
+      if(start < 0) start = 0;
+      let end = start + Math.ceil(wrap.clientHeight / ROW_H) + VBUF*2;
+      if(end > total) end = total;
+      if(start === vLastStart && end === vLastEnd) return;   // หน้าต่างเดิม ไม่ต้องวาดซ้ำ
+      vLastStart = start; vLastEnd = end;
+
+      const frag = document.createDocumentFragment();
+      frag.appendChild(spacerRow(start * ROW_H));                  // ดันด้วยที่ว่างด้านบน
+      for(let i=start; i<end; i++) frag.appendChild(buildVRow(vRows[i], i));
+      frag.appendChild(spacerRow((total - end) * ROW_H));         // เผื่อความสูงด้านล่าง
+
+      tbody.innerHTML = '';
+      tbody.appendChild(frag);
+    }
+
     function renderTable(rows,opts){
       opts=opts||{};
+      vRows = rows; vLastStart = -1; vLastEnd = -1;
+
       const thead=document.getElementById('tableHead'), tbody=document.getElementById('tableBody');
       thead.innerHTML=''; tbody.innerHTML='';
+
       const hr=document.createElement('tr');
       const thNo=document.createElement('th'); thNo.textContent='ลำดับ';
       thNo.style.width='50px'; thNo.style.minWidth='50px'; thNo.style.maxWidth='50px';
@@ -805,52 +1152,16 @@
       thead.appendChild(hr);
 
       if(rows.length===0){ setStatus('ไม่พบข้อมูลที่ตรงกับคำค้นหา'); return; }
-      const useTarget=(opts.chkUseDate&&opts.keyword)?extractDate(opts.keyword):null;
-      const editable = canEdit();
 
-      // ใช้ DocumentFragment + ไม่แปะ event handler รายช่อง (ใช้ delegation ที่ tbody แทน)
-      const frag = document.createDocumentFragment();
-      rows.forEach((row, idx)=>{
-        const tr=document.createElement('tr');
-        tr._row = row;   // เก็บอ้างอิงแถวไว้ให้ delegation ใช้
+      vCtx = {
+        useTarget: (opts.chkUseDate && opts.keyword) ? extractDate(opts.keyword) : null,
+        editable: canEdit(),
+        colCount: DISPLAY_FIELDS.length + 2   // ลำดับ + ฟิลด์ + จัดการ
+      };
 
-        const tdNo=document.createElement('td');
-        tdNo.textContent = idx+1;
-        tdNo.style.textAlign='center'; tdNo.style.color='#888';
-        tr.appendChild(tdNo);
-
-        DISPLAY_FIELDS.forEach(f=>{
-          const td=document.createElement('td');
-          td.dataset.fkey = f.key;   // ให้ delegation รู้ว่าเป็นช่องอะไร
-          let value=row[f.key]||'';
-          if(useTarget&&USE_KEYS.includes(f.key)){ const d=extractDate(value); if(!d||d.getTime()!==useTarget.getTime()) value=''; }
-          if(f.key==='status'){ value = effectiveStatus(row); }
-
-          if(USE_KEYS.includes(f.key) && value){
-            td.innerHTML = useCellHtml(value);
-          } else {
-            td.textContent=value;
-          }
-
-          if(USE_KEYS.includes(f.key)) td.classList.add('use-cell');
-          else if(f.key==='machine') td.classList.add('machine-cell');
-          if(editable) td.classList.add('editable');
-
-          if(f.dateUser){ const c=dateColor(value,true); if(c) td.style.backgroundColor=c; }
-          else if(f.dateExpire){ const c=dateColor(value,false); if(c) td.style.backgroundColor=c; }
-
-          tr.appendChild(td);
-        });
-
-        const tdAct=document.createElement('td'); tdAct.className='actions';
-        if(editable){
-          const b=document.createElement('button'); b.className='btn-yellow'; b.textContent='แก้ไข';
-          b.dataset.edit='1'; tdAct.appendChild(b);
-        } else { tdAct.textContent='ดูเท่านั้น'; }
-        tr.appendChild(tdAct);
-        frag.appendChild(tr);
-      });
-      tbody.appendChild(frag);
+      bindVScroll();
+      const wrap = vGetWrap(); if(wrap) wrap.scrollTop = 0;   // ผลค้นหาใหม่ = เด้งขึ้นบนสุด
+      renderWindow();
       setStatus('แสดง '+rows.length+' แถว');
     }
 
