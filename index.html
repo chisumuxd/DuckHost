@@ -879,9 +879,13 @@
       tbody.appendChild(frag);
     }
 
-    function renderTable(rows,opts){
+      function renderTable(rows,opts){
       opts=opts||{};
       vRows = rows; vLastStart = -1; vLastEnd = -1;
+
+      const wrap = vGetWrap();
+      // จำตำแหน่งสกรอลล์ไว้ก่อนวาดใหม่ (กันเด้งตอนแก้ไขข้อมูล)
+      const keepScroll = (wrap && !opts.resetScroll) ? wrap.scrollTop : 0;
 
       const thead=document.getElementById('tableHead'), tbody=document.getElementById('tableBody');
       thead.innerHTML=''; tbody.innerHTML='';
@@ -907,9 +911,9 @@
       };
 
       bindVScroll();
-      const wrap = vGetWrap();
-      if(opts.resetScroll && wrap) wrap.scrollTop = 0;   // เด้งขึ้นบนเฉพาะตอนค้นหา/เปลี่ยนตัวกรองใหม่
+      if(wrap) wrap.scrollTop = keepScroll;   // คืนตำแหน่งก่อนคำนวณหน้าต่าง (renderWindow อ่าน scrollTop)
       renderWindow();
+      if(wrap) wrap.scrollTop = keepScroll;   // ตั้งซ้ำอีกรอบ กัน browser clamp ตอน rebuild
       setStatus('แสดง '+rows.length+' แถว');
     }
   
