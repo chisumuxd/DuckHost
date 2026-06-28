@@ -281,6 +281,46 @@
           </div>
         </div>
 
+        <div id="duckWalk" style="position:relative; height:36px; overflow:hidden; margin-bottom:8px;">
+        <div class="duck">
+        <svg viewBox="0 0 70 50" width="46" height="33" xmlns="http://www.w3.org/2000/svg">
+        <!-- ขาหลัง (อยู่หลังตัว) -->
+        <g class="leg leg-back">
+        <rect x="26" y="37" width="3" height="10" rx="1.5" fill="#d9550b"/>
+        <rect x="23" y="45" width="9" height="3" rx="1.5" fill="#d9550b"/>
+        </g>
+        <!-- หาง -->
+        <path d="M8 26 Q2 22 4 30 Q8 30 12 30 Z" fill="#f7c948"/>
+        <!-- ตัว -->
+        <ellipse cx="28" cy="28" rx="19" ry="13" fill="#ffd43b"/>
+        <!-- ปีก -->
+        <ellipse cx="26" cy="27" rx="9" ry="6" fill="#f7c948"/>
+        <!-- หัว -->
+        <circle cx="48" cy="16" r="9" fill="#ffd43b"/>
+        <!-- ปาก -->
+        <path d="M56 13 L67 15 L67 18.5 L56 19.5 Z" fill="#fb923c" stroke="#ea580c" stroke-width="1"/>
+        <!-- ตา -->
+        <circle cx="50" cy="14" r="1.7" fill="#4b2e00"/>
+        <!-- ขาหน้า (อยู่หน้าตัว) -->
+        <g class="leg leg-front">
+        <rect x="33" y="37" width="3" height="10" rx="1.5" fill="#ea580c"/>
+        <rect x="30" y="45" width="9" height="3" rx="1.5" fill="#ea580c"/>
+      </g>
+    </svg>
+  </div>
+</div>
+<style>
+  #duckWalk .duck{ position:absolute; bottom:0; left:0; animation: duckWalk 14s linear infinite; }
+  #duckWalk .duck svg{ display:block; transform-origin:50% 92%; animation: waddle 0.42s ease-in-out infinite; }
+  #duckWalk .leg{ transform-box:fill-box; transform-origin:50% 0; }
+  #duckWalk .leg-front{ animation: stepFront 0.42s linear infinite; }
+  #duckWalk .leg-back{ animation: stepBack 0.42s linear infinite; }
+  @keyframes duckWalk{ from{ transform:translateX(-70px); } to{ transform:translateX(100vw); } }
+  @keyframes waddle{ 0%,100%{ transform:rotate(-5deg) translateY(0); } 50%{ transform:rotate(5deg) translateY(-2px); } }
+  @keyframes stepFront{ 0%,100%{ transform:rotate(20deg);} 50%{ transform:rotate(-20deg);} }
+  @keyframes stepBack{ 0%,100%{ transform:rotate(-20deg);} 50%{ transform:rotate(20deg);} }
+  @media (prefers-reduced-motion: reduce){ #duckWalk .duck,#duckWalk .duck svg,#duckWalk .leg{ animation:none; } }
+</style>
         <div id="summaryBar" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
           <div class="summary-box" style="background:#e7f1ff; color:#084298;">
             <div class="summary-num" id="sumTotal">-</div>
