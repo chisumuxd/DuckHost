@@ -265,10 +265,10 @@
             <div style="display:flex; flex-direction:column; gap:6px;">
               <h1 id="pageTitle" style="margin:0; font-size:21px;">หัวบ้าน Duck Duck Premium</h1>
               <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                 <div id="duckPond"></div>
                 <span id="userBadge" class="user-badge"></span>
                 <span id="roleBadge" class="role-badge"></span>
                 <span id="liveDot" class="live-dot"></span>
+                <div id="duckPond"></div>
               </div>
             </div>
           </div>
@@ -283,15 +283,13 @@
         </div>
 
       <style>
-      .topbar{ flex-wrap:nowrap !important; }                       /* กันตกบรรทัด */
-      .topbar-left{ flex:0 0 auto !important; min-width:0 !important; }
-      .topbar-actions{ flex:0 0 auto; }
-        #duckPond{
-          flex:1 1 auto; margin:0 12px; align-self:center;            /* ← ยืดเต็มช่องกลาง */
-          position:relative; height:52px; overflow:hidden; border-radius:12px;
-            background:
-            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 70' width='240' height='70'%3E%3Crect x='40' y='40' width='6' height='26' fill='%237a4a1e'/%3E%3Ccircle cx='43' cy='28' r='17' fill='%233f9d4f'/%3E%3Ccircle cx='30' cy='36' r='11' fill='%234fb866'/%3E%3Ccircle cx='56' cy='36' r='11' fill='%234fb866'/%3E%3Ccircle cx='43' cy='20' r='11' fill='%2357c46f'/%3E%3Crect x='117' y='46' width='6' height='20' fill='%23654321'/%3E%3Cpolygon points='120,8 104,34 136,34' fill='%232f8f43'/%3E%3Cpolygon points='120,20 102,46 138,46' fill='%23379a4d'/%3E%3Cpolygon points='120,30 100,56 140,56' fill='%233f9d4f'/%3E%3Crect x='196' y='48' width='5' height='18' fill='%237a4a1e'/%3E%3Ccircle cx='198' cy='42' r='12' fill='%234caf5e'/%3E%3Ccircle cx='189' cy='48' r='8' fill='%2357c46f'/%3E%3Ccircle cx='207' cy='48' r='8' fill='%2357c46f'/%3E%3C/svg%3E") repeat-x left top / 120px 36px,
-            linear-gradient(to bottom, #cdeafe 0, #cdeafe 28px, #6cb7e8 28px, #3f8fd0 100%);
+      .topbar-left{ flex:1 1 auto !important; min-width:200px !important; }   /* ขยายเต็มจนเกือบถึงปุ่ม */
+      #duckPond{
+      flex:1 1 120px; min-width:120px; height:40px; align-self:center;
+      position:relative; overflow:hidden; border-radius:10px;
+      background:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 70' width='240' height='70'%3E%3Crect x='40' y='40' width='6' height='26' fill='%237a4a1e'/%3E%3Ccircle cx='43' cy='28' r='17' fill='%233f9d4f'/%3E%3Ccircle cx='30' cy='36' r='11' fill='%234fb866'/%3E%3Ccircle cx='56' cy='36' r='11' fill='%234fb866'/%3E%3Ccircle cx='43' cy='20' r='11' fill='%2357c46f'/%3E%3Crect x='117' y='46' width='6' height='20' fill='%23654321'/%3E%3Cpolygon points='120,8 104,34 136,34' fill='%232f8f43'/%3E%3Cpolygon points='120,20 102,46 138,46' fill='%23379a4d'/%3E%3Cpolygon points='120,30 100,56 140,56' fill='%233f9d4f'/%3E%3Crect x='196' y='48' width='5' height='18' fill='%237a4a1e'/%3E%3Ccircle cx='198' cy='42' r='12' fill='%234caf5e'/%3E%3Ccircle cx='189' cy='48' r='8' fill='%2357c46f'/%3E%3Ccircle cx='207' cy='48' r='8' fill='%2357c46f'/%3E%3C/svg%3E") repeat-x left top / 100px 30px,
+      linear-gradient(to bottom, #cdeafe 0, #cdeafe 23px, #6cb7e8 23px, #3f8fd0 100%);
     
       }
         #duckPond .pduck{ position:absolute; animation: pdSwim ease-in-out infinite; }
