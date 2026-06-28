@@ -919,7 +919,20 @@
       }
       setStatus('แสดง '+rows.length+' แถว');
     }
-  
+
+        // อัปเดตแถวเดียวใน DOM โดยไม่วาดทั้งตารางใหม่ (กันหน้าเด้ง/ขยับ)
+    function refreshRowDom(rowObj){
+      const tbody=document.getElementById('tableBody');
+      if(!tbody || !vCtx || !rowObj) return false;
+      for(const tr of tbody.children){
+        if(tr._row && tr._row.id===rowObj.id){
+          const n = parseInt(tr.firstChild ? tr.firstChild.textContent : '', 10);
+          tr.replaceWith(buildVRow(rowObj, isNaN(n) ? 0 : n-1));
+          return true;
+        }
+      }
+      return false;   // แถวไม่อยู่ในจอ → ให้ผู้เรียกไปวาดปกติแทน
+    }
 
     // event delegation — แปะ handler ครั้งเดียวที่ tbody (แทนที่จะแปะทุกช่อง)
     function initTableHandlers(){
@@ -1055,7 +1068,15 @@
       }
       btn.disabled=false; btn.textContent='บันทึก';
       if(error){ showModalAlert('บันทึกไม่สำเร็จ: '+error.message); return; }
-      closeModal(); applySearch(); updateSummary();
+      closeModal();
+      // โหมดแก้ไข = อัปเดตเฉพาะแถวนั้น (ไม่เด้ง); โหมดเพิ่ม = วาดใหม่
+      if(currentMode==='edit'){
+        const i=accountsRows.findIndex(r=>r.id===editingId);
+        if(!(i>=0 && refreshRowDom(accountsRows[i]))) applySearch();
+      } else {
+        applySearch();
+      }
+      updateSummary();
       showPopup(currentMode==='add'?'เพิ่มข้อมูลสำเร็จ':'บันทึกสำเร็จ','ข้อมูลถูกบันทึกแล้ว','success');
     }
 
@@ -1239,7 +1260,9 @@
       const idx = accountsRows.findIndex(r=>r.id===row.id);
       if(idx>=0) accountsRows[idx] = Object.assign({}, accountsRows[idx], payload);
       saveCache(getMaxUpdatedAt());
-      applySearch(); updateSummary();
+      // อัปเดตเฉพาะแถวนั้น — ไม่วาดตารางใหม่ = หน้าค้างที่เดิม ไม่เด้ง
+      if(!(idx>=0 && refreshRowDom(accountsRows[idx]))) applySearch();
+      updateSummary();
       setStatus('แก้ไข '+header+' ของ ID '+row.id+' แล้ว');
     }
 
