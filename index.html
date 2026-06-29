@@ -1120,11 +1120,10 @@
       };
 
       bindVScroll();
-      if(wrap) wrap.scrollTop = keepScroll;   // คืนตำแหน่งก่อนคำนวณหน้าต่าง
-      renderWindow();
+      renderWindow();                 // วาดรอบแรกให้ tbody สูงเต็มก่อน (ไม่งั้น scrollTop ถูก clamp เป็น 0)
       if(wrap){
-        wrap.scrollTop = keepScroll;          // คืนอีกรอบทันที
-        requestAnimationFrame(()=>{ wrap.scrollTop = keepScroll; });  // คืนหลัง browser วาดเสร็จ กันเด้งให้สนิท
+        wrap.scrollTop = keepScroll;  // ตอนนี้ tbody สูงเต็มแล้ว คืนตำแหน่งได้จริง
+        renderWindow();               // วาดซ้ำให้ตรงตำแหน่ง — synchronous ไม่พึ่ง rAF (แท็บเบื้องหลังก็ถูก)
       }
       setStatus('แสดง '+rows.length+' แถว');
     }
