@@ -708,9 +708,9 @@
         const okBtn=document.createElement('button'); okBtn.textContent='ตกลง';
         okBtn.style.cssText='flex:1;padding:11px;border-radius:10px;border:none;background:#198754;color:#fff;font-weight:700;cursor:pointer;';
         okBtn.onclick=submit;
-        const clearBtn=document.createElement('button'); clearBtn.textContent='ลบค่า';
+        const clearBtn=document.createElement('button'); clearBtn.textContent='เตะแล้ว';
         clearBtn.style.cssText='flex:1;padding:11px;border-radius:10px;border:none;background:#ffc107;color:#222;font-weight:700;cursor:pointer;';
-        clearBtn.onclick=()=>{ document.body.removeChild(backdrop); resolve(''); };
+        clearBtn.onclick=()=>{ document.body.removeChild(backdrop); resolve('ว่าง'); };
         const cancelBtn=document.createElement('button'); cancelBtn.textContent='ยกเลิก';
         cancelBtn.style.cssText='flex:1;padding:11px;border-radius:10px;border:none;background:#6c757d;color:#fff;font-weight:700;cursor:pointer;';
         cancelBtn.onclick=()=>{ document.body.removeChild(backdrop); resolve(null); };
