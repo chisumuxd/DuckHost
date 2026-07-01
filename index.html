@@ -273,7 +273,7 @@
           </div>
           <div class="topbar-actions">
             <button class="btn-yellow" onclick="openGiftCard()">🎁 เบิก gift card</button>
-            <button id="claimRoomBtn" class="btn-primary" onclick="openClaimRoom()">🏠 เบิกห้องว่าง</button>
+            <button id="roomPageBtn" class="btn-primary" onclick="toggleRoomPage()">🏠 หน้าห้องว่าง</button>
             <button id="manageUsersBtn" class="btn-gray" style="display:none;" onclick="openUserModal()">จัดการผู้ใช้</button>
             <button id="auditBtn" class="btn-gray" style="display:none;" onclick="openAuditModal()">ประวัติ</button>
             <button id="addBtn" class="btn-blue" onclick="openAddModal()">+ เพิ่มข้อมูล</button>
@@ -934,6 +934,7 @@
     }
 
     function applySearch(){
+      if(isRoomPage){ renderRoomPage(); return; }
       const keyword=document.getElementById('searchInput').value.trim().toLowerCase();
       const chkMachine=document.getElementById('chkMachine').checked;
       const chkUseDate=document.getElementById('chkUseDate').checked;
@@ -1018,6 +1019,7 @@
     }
 
     function buildVRow(row, idx){
+      if(vCtx && vCtx.mode==='room') return buildRoomRow(row, idx);
       const { useTarget, editable } = vCtx;
       const tr=document.createElement('tr');
       tr._row = row;
@@ -1132,6 +1134,7 @@
 
         // อัปเดตแถวเดียวใน DOM โดยไม่วาดทั้งตารางใหม่ (กันหน้าเด้ง/ขยับ)
     function refreshRowDom(rowObj){
+      if(isRoomPage) return false;
       const tbody=document.getElementById('tableBody');
       if(!tbody || !vCtx || !rowObj) return false;
       for(const tr of tbody.children){
@@ -1781,6 +1784,135 @@ function openClaimRoom(){
   document.body.appendChild(backdrop);
   rebuild();
   setTimeout(()=>nameInput.focus(), 60);
+}
+
+/* ===== หน้าห้องว่าง (เบิกห้องยึด) — แสดงทีละห้องแทนรายชื่อหัวบ้าน ===== */
+let isRoomPage = false;
+
+// คอลัมน์ของหน้าห้องว่าง (__slot / __type เป็นคอลัมน์พิเศษ)
+const ROOM_FIELDS = [
+  { key:'email',       header:'Email หัวบ้าน',   width:240 },
+  { key:'pass',        header:'Pass',            width:160 },
+  { key:'__slot',      header:'ช่อง',            width:70  },
+  { key:'__type',      header:'ประเภท',          width:90  },
+  { key:'machine',     header:'เครื่อง',          width:110 },
+  { key:'expire_date', header:'หมดอายุหัวบ้าน',  width:110, dateExpire:true },
+];
+
+// กวาดหาช่อง Use ที่ว่างจากทุกหัวบ้าน → คืน [{row, key, kicked}]
+function collectEmptyRooms(){
+  const list = [];
+  for(const row of accountsRows){
+    for(const k of USE_KEYS){
+      const v = String(row[k]||'').trim();
+      if(v === 'ว่าง')   list.push({ row, key:k, kicked:true });   // ห้องยึด (ลูกค้าคืน/โดนเตะ)
+      else if(v === '')  list.push({ row, key:k, kicked:false });  // ช่องว่างเปล่า (ยังไม่เคยขาย)
+    }
+  }
+  return list;
+}
+
+function toggleRoomPage(){
+  isRoomPage = !isRoomPage;
+  const btn = document.getElementById('roomPageBtn');
+  const title = document.getElementById('pageTitle');
+  if(isRoomPage){
+    // ปิดหน้า "หมดอายุ" ถ้าเปิดค้างอยู่ กันชนกัน
+    if(typeof isExpiredPage!=='undefined' && isExpiredPage){
+      isExpiredPage=false;
+      const eb=document.getElementById('expiredBtn'); if(eb){ eb.textContent='หมดอายุแล้ว'; eb.className='btn-red'; }
+    }
+    btn.textContent='◂ กลับหน้าหัวบ้าน'; btn.className='btn-gray';
+    title.textContent='ห้องว่าง (เบิกห้องยึด)';
+    renderRoomPage();
+  } else {
+    btn.textContent='🏠 หน้าห้องว่าง'; btn.className='btn-primary';
+    title.textContent='หัวบ้าน Duck Duck Premium';
+    applySearch();
+  }
+}
+
+function renderRoomPage(){
+  let rooms = collectEmptyRooms();
+
+  // กรองด้วยช่องค้นหาหลัก (อีเมล/pass/เครื่อง)
+  const kw = document.getElementById('searchInput').value.trim().toLowerCase();
+  if(kw){
+    const ws = kw.split(/\s+/).filter(Boolean);
+    rooms = rooms.filter(it=>{
+      const hay = (String(it.row.email||'')+' '+String(it.row.pass||'')+' '+String(it.row.machine||'')).toLowerCase();
+      return ws.every(w=>hay.includes(w));
+    });
+  }
+  // ห้องยึดขึ้นก่อน แล้วเรียงตาม id หัวบ้าน → ช่อง
+  rooms.sort((a,b)=> (b.kicked-a.kicked) || (a.row.id-b.row.id) || (USE_KEYS.indexOf(a.key)-USE_KEYS.indexOf(b.key)));
+
+  vRows = rooms; vLastStart = -1; vLastEnd = -1;
+  const wrap = vGetWrap();
+  const thead = document.getElementById('tableHead'), tbody = document.getElementById('tableBody');
+  thead.innerHTML=''; tbody.innerHTML='';
+
+  const hr=document.createElement('tr');
+  const thNo=document.createElement('th'); thNo.textContent='ลำดับ';
+  thNo.style.width='50px'; thNo.style.minWidth='50px'; thNo.style.maxWidth='50px'; hr.appendChild(thNo);
+  ROOM_FIELDS.forEach(f=>{
+    const th=document.createElement('th'); th.textContent=f.header;
+    th.style.width=f.width+'px'; th.style.minWidth=f.width+'px'; th.style.maxWidth=f.width+'px';
+    hr.appendChild(th);
+  });
+  const thAct=document.createElement('th'); thAct.textContent='จัดการ';
+  thAct.style.width='110px'; thAct.style.minWidth='110px'; thAct.style.maxWidth='110px'; hr.appendChild(thAct);
+  thead.appendChild(hr);
+
+  const totalW = 50 + 110 + ROOM_FIELDS.reduce((s,f)=>s+f.width,0);
+  const tableEl = thead.parentElement;
+  tableEl.style.width = totalW+'px'; tableEl.style.minWidth = totalW+'px';
+
+  const kickedCount = rooms.filter(r=>r.kicked).length;
+  setStatus('หน้าห้องว่าง: '+rooms.length+' ห้อง (ห้องยึด '+kickedCount+' • ว่างเปล่า '+(rooms.length-kickedCount)+')');
+  if(rooms.length===0) return;
+
+  vCtx = { mode:'room', colCount: ROOM_FIELDS.length + 2 };
+  bindVScroll();
+  renderWindow();
+  if(wrap){ wrap.scrollTop = 0; renderWindow(); }
+}
+
+function buildRoomRow(item, idx){
+  const { row, key, kicked } = item;
+  const n = USE_KEYS.indexOf(key)+1;
+  const tr = document.createElement('tr'); tr._row = row;
+
+  const tdNo=document.createElement('td'); tdNo.textContent=idx+1;
+  tdNo.style.textAlign='center'; tdNo.style.color='#888'; tr.appendChild(tdNo);
+
+  ROOM_FIELDS.forEach(f=>{
+    const td=document.createElement('td');
+    if(f.key==='__slot'){
+      td.innerHTML='<b>Use '+n+'</b>';
+    } else if(f.key==='__type'){
+      td.innerHTML = kicked
+        ? '<span style="background:#fa5252;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">ห้องยึด</span>'
+        : '<span style="background:#adb5bd;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">ว่างเปล่า</span>';
+    } else {
+      const value=row[f.key]||'';
+      td.textContent=value;
+      if(f.dateExpire){ const c=dateColor(value,false); if(c) td.style.backgroundColor=c; }
+    }
+    tr.appendChild(td);
+  });
+
+  const tdAct=document.createElement('td'); tdAct.className='actions';
+  if(canEdit()){
+    const b=document.createElement('button'); b.className='btn-yellow'; b.textContent='เบิกห้อง';
+    // ใช้ตัวแก้ช่อง Use เดิม (มีปุ่มร้าน + ชื่อ + วันที่ + เตะแล้ว) → บันทึก+audit+cache ครบเหมือนเดิม
+    b.onclick=()=>quickEditCell(row, key, 'Use '+n, row[key]||'');
+    tdAct.appendChild(b);
+  } else {
+    tdAct.textContent='ดูเท่านั้น';
+  }
+  tr.appendChild(tdAct);
+  return tr;
 }
     
   </script>
