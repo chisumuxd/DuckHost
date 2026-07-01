@@ -1724,7 +1724,7 @@ function openClaimRoom(){
     const q = searchInput.value.trim().toLowerCase();
     avail = q ? base.filter(x=>String(x.row.email||'').toLowerCase().includes(q)) : base;
     if(idx >= avail.length) idx = 0;
-    infoEl.innerHTML = 'ห้องว่างทั้งหมด <b>'+allRooms.length+'</b> ห้อง &nbsp;•&nbsp; ห้องยึด (ว่าง) <b>'+kickedCount+'</b>'
+    infoEl.innerHTML = 'ห้องว่างทั้งหมด <b>'+allRooms.length+'</b> ห้อง &nbsp;•&nbsp; ห้องว่าง <b>'+kickedCount+'</b>'
       + (q ? ' &nbsp;•&nbsp; ตรงคำค้น <b>'+avail.length+'</b>' : '');
     renderTarget();
   }
@@ -1735,7 +1735,7 @@ function openClaimRoom(){
       '<div>จะเบิกห้องนี้ ('+(idx+1)+'/'+avail.length+'):</div>'
       + '<div style="margin-top:4px;"><b>'+escapeHtml(t.row.email||('ID '+t.row.id))+'</b></div>'
       + '<div style="margin-top:2px;">ช่อง <b>Use '+slotNo+'</b> '
-      + (t.kicked ? '<span style="background:#fa5252;color:#fff;padding:1px 6px;border-radius:8px;font-size:11px;">ห้องยึด</span>'
+      + (t.kicked ? '<span style="background:#fa5252;color:#fff;padding:1px 6px;border-radius:8px;font-size:11px;">ห้อ</span>'
                   : '<span style="background:#adb5bd;color:#fff;padding:1px 6px;border-radius:8px;font-size:11px;">ว่างเปล่า</span>') + '</div>';
   }
 
@@ -1796,19 +1796,20 @@ const ROOM_FIELDS = [
   { key:'email',       header:'Email หัวบ้าน',   width:240 },
   { key:'pass',        header:'Pass',            width:160 },
   { key:'__slot',      header:'ช่อง',            width:70  },
-  { key:'__type',      header:'ประเภท',          width:90  },
   { key:'machine',     header:'เครื่อง',          width:110 },
   { key:'expire_date', header:'หมดอายุหัวบ้าน',  width:110, dateExpire:true },
 ];
 
-// กวาดหาช่อง Use ที่ว่างจากทุกหัวบ้าน → คืน [{row, key, kicked}]
+/// กวาดหาช่อง Use ที่ "ว่าง" — จากหัวบ้านที่ยังไม่หมดอายุเท่านั้น
+// ว่าง = ใส่คำว่า 'ว่าง' หรือ ไม่ได้ใส่อะไรเลย (ช่องเปล่า) → นับเหมือนกัน
 function collectEmptyRooms(){
+  const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
   const list = [];
   for(const row of accountsRows){
+    const d = extractDate(row.expire_date);
+    if(d && d.getTime() <= today.getTime()) continue;   // ⛔ หัวบ้านหมดอายุ — ข้าม
     for(const k of USE_KEYS){
-      const v = String(row[k]||'').trim();
-      if(v === 'ว่าง')   list.push({ row, key:k, kicked:true });   // ห้องยึด (ลูกค้าคืน/โดนเตะ)
-      else if(v === '')  list.push({ row, key:k, kicked:false });  // ช่องว่างเปล่า (ยังไม่เคยขาย)
+      if(isEmptyUse(row[k])) list.push({ row, key:k });   // isEmptyUse: '' หรือ 'ว่าง' = ว่างเหมือนกัน
     }
   }
   return list;
@@ -1846,8 +1847,8 @@ function renderRoomPage(){
       return ws.every(w=>hay.includes(w));
     });
   }
-  // ห้องยึดขึ้นก่อน แล้วเรียงตาม id หัวบ้าน → ช่อง
-  rooms.sort((a,b)=> (b.kicked-a.kicked) || (a.row.id-b.row.id) || (USE_KEYS.indexOf(a.key)-USE_KEYS.indexOf(b.key)));
+  // เรียงตาม id หัวบ้าน → ช่อง
+  rooms.sort((a,b)=> (a.row.id-b.row.id) || (USE_KEYS.indexOf(a.key)-USE_KEYS.indexOf(b.key)));
 
   vRows = rooms; vLastStart = -1; vLastEnd = -1;
   const wrap = vGetWrap();
@@ -1870,8 +1871,7 @@ function renderRoomPage(){
   const tableEl = thead.parentElement;
   tableEl.style.width = totalW+'px'; tableEl.style.minWidth = totalW+'px';
 
-  const kickedCount = rooms.filter(r=>r.kicked).length;
-  setStatus('หน้าห้องว่าง: '+rooms.length+' ห้อง (ห้องยึด '+kickedCount+' • ว่างเปล่า '+(rooms.length-kickedCount)+')');
+  setStatus('หน้าห้องว่าง: '+rooms.length+' ห้องว่าง (จากหัวบ้านที่ยังไม่หมดอายุ)');
   if(rooms.length===0) return;
 
   vCtx = { mode:'room', colCount: ROOM_FIELDS.length + 2 };
