@@ -940,11 +940,11 @@
       let selectedDate=null; if(dateStr){const p=dateStr.split('-'); selectedDate=new Date(+p[0],+p[1]-1,+p[2]);}
       const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
 
-      // หน้าแรกว่าง — แสดงข้อมูลก็ต่อเมื่อมีการค้นหา/กรองที่ยืนได้ด้วยตัวเอง
-      // (chkUseDate / chkMachine เป็นแค่ตัวปรับการค้นหา ต้องมีคำค้นด้วยถึงจะนับ)
-      // ตัวกรอง/คำค้นเปลี่ยนไหม → ถ้าเปลี่ยน = ค้นหาใหม่ ค่อยเด้งขึ้นบน
+      const filterSig = JSON.stringify([keyword, dateStr, chkMachine, chkUseDate, isExpiredPage]);
       const resetScroll = (filterSig !== lastFilterSig);
       lastFilterSig = filterSig;
+
+      const hasFilter = !!(keyword || dateStr || isExpiredPage);
       if(!hasFilter){
         renderTable(accountsRows, { resetScroll });   // แสดงทั้งหมด — เบาเพราะ virtual scroll
         return;
