@@ -273,6 +273,7 @@
           </div>
           <div class="topbar-actions">
             <button class="btn-yellow" onclick="openGiftCard()">🎁 เบิก gift card</button>
+            <button id="claimRoomBtn" class="btn-primary" onclick="openClaimRoom()">🏠 เบิกห้องว่าง</button>
             <button id="manageUsersBtn" class="btn-gray" style="display:none;" onclick="openUserModal()">จัดการผู้ใช้</button>
             <button id="auditBtn" class="btn-gray" style="display:none;" onclick="openAuditModal()">ประวัติ</button>
             <button id="addBtn" class="btn-blue" onclick="openAddModal()">+ เพิ่มข้อมูล</button>
@@ -744,6 +745,7 @@
       document.getElementById('userBadge').textContent='ผู้ใช้: '+profile.username;
       document.getElementById('roleBadge').textContent=profile.role;
       document.getElementById('addBtn').style.display = canEdit() ? 'inline-block' : 'none';
+      document.getElementById('claimRoomBtn').style.display = canEdit() ? 'inline-block' : 'none';
       document.getElementById('manageUsersBtn').style.display = (currentUser.role==='ADMIN') ? 'inline-block' : 'none';
       document.getElementById('auditBtn').style.display = (currentUser.role==='ADMIN') ? 'inline-block' : 'none';
       await loadMachineOptions();
@@ -1638,6 +1640,148 @@
   }
   if(document.readyState!=='loading') setup(); else document.addEventListener('DOMContentLoaded', setup);
 })();
+
+/* ===== เบิกห้องว่าง (ห้องยึด) — เติมลูกค้าลงช่อง Use ที่ว่าง ===== */
+function collectEmptyRooms(){
+  const list = [];
+  for(const row of accountsRows){
+    for(const k of USE_KEYS){
+      const v = String(row[k]||'').trim();
+      if(v === 'ว่าง')   list.push({ row, key:k, kicked:true });   // ห้องยึด (ลูกค้าคืน/โดนเตะ)
+      else if(v === '')  list.push({ row, key:k, kicked:false });  // ช่องว่างเปล่า (ยังไม่เคยขาย)
+    }
+  }
+  return list;   // เรียงตาม id หัวบ้าน (accountsRows เรียง id อยู่แล้ว)
+}
+
+function openClaimRoom(){
+  if(!canEdit()){ showPopup('ไม่มีสิทธิ์','บัญชีนี้ดูข้อมูลเท่านั้น','error'); return; }
+
+  let selectedStore = STORE_OPTIONS[0] || '';
+  let avail = [];      // ห้องว่างที่ผ่านตัวกรอง ณ ตอนนี้
+  let idx = 0;         // ชี้ห้องที่จะเบิก
+
+  const backdrop = document.createElement('div');
+  backdrop.style.cssText='position:fixed;inset:0;background:rgba(40,60,45,0.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
+  const box = document.createElement('div');
+  box.style.cssText='background:#fff;max-width:460px;width:100%;margin:8vh auto 0;border-radius:22px;padding:22px;box-shadow:0 16px 48px rgba(40,80,50,0.25);border:2px solid #d7eede;';
+  backdrop.appendChild(box);
+
+  box.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="font-size:18px;font-weight:800;color:#2f9e44;">🏠 เบิกห้องว่าง</div>
+      <button class="btn-red" data-act="close">ปิด</button>
+    </div>
+    <div data-el="info" style="font-size:13px;color:#555;background:#f1faf4;border:1px solid #c3ebcf;border-radius:12px;padding:8px 12px;margin-bottom:12px;"></div>
+    <label class="chk-label" style="margin-bottom:12px;"><input type="checkbox" data-el="kicked" checked>เฉพาะห้องยึด (ว่าง) เท่านั้น</label>
+    <div style="font-size:13px;font-weight:700;color:#555;margin:2px 0 5px;">ร้าน:</div>
+    <div data-el="stores" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
+    <div style="font-size:13px;font-weight:700;color:#555;margin-bottom:5px;">ชื่อลูกค้า:</div>
+    <input data-el="name" type="text" placeholder="เช่น nannamonjam" style="width:100%;padding:11px 12px;border:1px solid #ccc;border-radius:10px;font-size:15px;margin-bottom:12px;">
+    <div style="font-size:13px;font-weight:700;color:#555;margin-bottom:5px;">วันที่ (หมดอายุห้อง):</div>
+    <input data-el="date" type="text" placeholder="เช่น 7/7/69" style="width:100%;padding:11px 12px;border:1px solid #ccc;border-radius:10px;font-size:15px;margin-bottom:12px;">
+    <div style="font-size:13px;font-weight:700;color:#555;margin-bottom:5px;">เจาะจงหัวบ้าน (ไม่บังคับ — เว้นว่าง = อัตโนมัติ):</div>
+    <input data-el="search" type="text" placeholder="พิมพ์อีเมลหัวบ้าน" style="width:100%;padding:11px 12px;border:1px solid #ccc;border-radius:10px;font-size:15px;margin-bottom:12px;">
+    <div data-el="target" style="background:#fff8e6;border:1px solid #ffe066;border-radius:12px;padding:10px 12px;margin-bottom:8px;font-size:13px;min-height:44px;"></div>
+    <div data-el="err" style="font-size:12px;color:#d93025;font-weight:700;min-height:16px;margin-bottom:6px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn-primary" data-act="confirm" style="flex:1;">ยืนยันเบิกห้อง</button>
+      <button class="btn-gray" data-act="next">ห้องถัดไป ▸</button>
+    </div>`;
+
+  const el = s => box.querySelector('[data-el="'+s+'"]');
+  const nameInput=el('name'), dateInput=el('date'), searchInput=el('search'),
+        infoEl=el('info'), targetEl=el('target'), errEl=el('err'), kickedChk=el('kicked');
+  const setErr = m => { errEl.textContent = m||''; };
+
+  // ปุ่มเลือกร้าน (กดซ้ำ = ยกเลิก) — ใช้สีร้านเดิม
+  const storesWrap=el('stores'); const storeBtns=[];
+  function refreshStores(){
+    storeBtns.forEach(({btn,store})=>{
+      const on=(store===selectedStore), bg=storeColor(store);
+      btn.style.background = on?bg:'#fff';
+      btn.style.color = on?readableText(bg):'#333';
+      btn.style.border = '2px solid '+bg;
+    });
+  }
+  STORE_OPTIONS.forEach(store=>{
+    const b=document.createElement('button'); b.type='button'; b.textContent=store;
+    b.style.cssText='flex:1;min-width:80px;padding:9px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;';
+    b.onclick=()=>{ selectedStore=(selectedStore===store)?'':store; refreshStores(); };
+    storeBtns.push({btn:b,store}); storesWrap.appendChild(b);
+  });
+  refreshStores();
+
+  function rebuild(){
+    const allRooms = collectEmptyRooms();
+    const kickedCount = allRooms.filter(x=>x.kicked).length;
+    const base = kickedChk.checked ? allRooms.filter(x=>x.kicked) : allRooms;
+    const q = searchInput.value.trim().toLowerCase();
+    avail = q ? base.filter(x=>String(x.row.email||'').toLowerCase().includes(q)) : base;
+    if(idx >= avail.length) idx = 0;
+    infoEl.innerHTML = 'ห้องว่างทั้งหมด <b>'+allRooms.length+'</b> ห้อง &nbsp;•&nbsp; ห้องยึด (ว่าง) <b>'+kickedCount+'</b>'
+      + (q ? ' &nbsp;•&nbsp; ตรงคำค้น <b>'+avail.length+'</b>' : '');
+    renderTarget();
+  }
+  function renderTarget(){
+    if(avail.length===0){ targetEl.innerHTML='<span style="color:#c92a2a;">❌ ไม่มีห้องว่างตรงเงื่อนไข</span>'; return; }
+    const t=avail[idx], slotNo=USE_KEYS.indexOf(t.key)+1;
+    targetEl.innerHTML =
+      '<div>จะเบิกห้องนี้ ('+(idx+1)+'/'+avail.length+'):</div>'
+      + '<div style="margin-top:4px;"><b>'+escapeHtml(t.row.email||('ID '+t.row.id))+'</b></div>'
+      + '<div style="margin-top:2px;">ช่อง <b>Use '+slotNo+'</b> '
+      + (t.kicked ? '<span style="background:#fa5252;color:#fff;padding:1px 6px;border-radius:8px;font-size:11px;">ห้องยึด</span>'
+                  : '<span style="background:#adb5bd;color:#fff;padding:1px 6px;border-radius:8px;font-size:11px;">ว่างเปล่า</span>') + '</div>';
+  }
+
+  async function confirmClaim(){
+    setErr('');
+    const name=nameInput.value.trim(), date=dateInput.value.trim();
+    if(!name){ setErr('⚠️ กรุณาใส่ชื่อลูกค้า'); nameInput.focus(); return; }
+    if(!date){ setErr('⚠️ กรุณาใส่วันที่'); dateInput.focus(); return; }
+    const val = joinUseValue(selectedStore, name, date);
+    if(!isValidUseValue(val)){ setErr('⚠️ วันที่ไม่ถูกต้อง เช่น 7/7/69'); dateInput.focus(); return; }
+    if(avail.length===0){ setErr('ไม่มีห้องว่างให้เบิก'); return; }
+
+    const t = avail[idx];
+    const live = accountsRows.find(r=>r.id===t.row.id);
+    if(!live || !isEmptyUse(live[t.key])){ setErr('ห้องนี้เพิ่งถูกเบิกไปแล้ว กำลังหาห้องใหม่...'); rebuild(); return; }
+
+    const btn=box.querySelector('[data-act="confirm"]'); btn.disabled=true; btn.textContent='กำลังเบิก...';
+    const payload={}; payload[t.key]=val;
+    const res = await sb.from('accounts').update(payload).eq('id', t.row.id).select(COLS).single();
+    btn.disabled=false; btn.textContent='ยืนยันเบิกห้อง';
+    if(res.error){ setErr('เบิกไม่สำเร็จ: '+res.error.message); return; }
+
+    markSaved(t.row.id);
+    await writeAudit('UPDATE', t.row.id, live, res.data);
+    const i=accountsRows.findIndex(r=>r.id===t.row.id);
+    if(i>=0) accountsRows[i]=res.data;
+    saveCache(getMaxUpdatedAt());
+    if(!(i>=0 && refreshRowDom(accountsRows[i]))) applySearch();
+    updateSummary();
+    setStatus('เบิกห้อง Use '+(USE_KEYS.indexOf(t.key)+1)+' ของ '+(res.data.email||('ID '+t.row.id))+' ให้ '+name+' แล้ว');
+
+    // สำเร็จ — ล้างชื่อเตรียมเบิกคนถัดไป (คงร้าน/วันที่ไว้)
+    nameInput.value='';
+    infoEl.innerHTML = '<span style="color:#2f9e44;font-weight:700;">✅ เบิกห้องให้ '+escapeHtml(name)+' สำเร็จ</span>';
+    setTimeout(rebuild, 900);
+    nameInput.focus();
+  }
+
+  box.querySelector('[data-act="close"]').onclick = ()=>document.body.removeChild(backdrop);
+  box.querySelector('[data-act="confirm"]').onclick = confirmClaim;
+  box.querySelector('[data-act="next"]').onclick = ()=>{ if(avail.length){ idx=(idx+1)%avail.length; renderTarget(); } };
+  kickedChk.onchange = ()=>{ idx=0; rebuild(); };
+  searchInput.oninput = ()=>{ idx=0; rebuild(); };
+  dateInput.onkeydown = e=>{ if(e.key==='Enter') confirmClaim(); };
+  nameInput.onkeydown = e=>{ if(e.key==='Enter') dateInput.focus(); };
+  backdrop.onclick = e=>{ if(e.target===backdrop) document.body.removeChild(backdrop); };
+
+  document.body.appendChild(backdrop);
+  rebuild();
+  setTimeout(()=>nameInput.focus(), 60);
+}
     
   </script>
 </body>
