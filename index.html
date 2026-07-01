@@ -1954,9 +1954,12 @@ function renderRoomPage(){
     // ใช้ตัวแก้ช่อง Use เดิม (มีปุ่มร้าน + ชื่อ + วันที่ + เตะแล้ว) → บันทึก+audit+cache ครบเหมือนเดิม
  
   b.onclick=async ()=>{
-      const nv = await quickEditCell(row, key, 'Use '+n, row[key]||'');
-      if(nv && String(nv).trim() && String(nv).trim()!=='ว่าง'){
-        showClaimResult(row, nv);
+      const before = String(row[key]||'').trim();
+      await quickEditCell(row, key, 'Use '+n, row[key]||'');
+      const live = accountsRows.find(r=>r.id===row.id);
+      const nv = live ? String(live[key]||'').trim() : '';
+      if(nv && nv!=='ว่าง' && nv!==before){
+        showClaimResult(live || row, nv);
       }
     };
     
