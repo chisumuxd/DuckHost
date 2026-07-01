@@ -745,7 +745,6 @@
       document.getElementById('userBadge').textContent='ผู้ใช้: '+profile.username;
       document.getElementById('roleBadge').textContent=profile.role;
       document.getElementById('addBtn').style.display = canEdit() ? 'inline-block' : 'none';
-      document.getElementById('claimRoomBtn').style.display = canEdit() ? 'inline-block' : 'none';
       document.getElementById('manageUsersBtn').style.display = (currentUser.role==='ADMIN') ? 'inline-block' : 'none';
       document.getElementById('auditBtn').style.display = (currentUser.role==='ADMIN') ? 'inline-block' : 'none';
       await loadMachineOptions();
