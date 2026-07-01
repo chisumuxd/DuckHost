@@ -1736,23 +1736,24 @@ function renderRoomPage(){
   if(wrap){ wrap.scrollTop = 0; renderWindow(); }
 }
 
-// popup แสดงผลหลังเบิกห้อง: หัวบ้าน + ลูกบ้าน พร้อมปุ่มคัดลอก
-  function showClaimResult(row, newValue){
+// popup หลังเบิกห้อง: ข้อความชุดเดียว คัดลอกทีเดียวได้ทั้งก้อน
+function showClaimResult(row, newValue){
   const head = row.email || ('ID '+row.id);
   const p = parseUseValue(newValue);
   const tenant = [p.name, p.date].filter(Boolean).join(' ');   // ชื่อลูกค้า + วันที่
-  const blocks = [
-    { label:'หัวบ้าน', value: head },
-    { label:'ลูกบ้าน', value: tenant }
-  ];
-  const html = blocks.map((b,i)=>
-    '<div style="text-align:left;margin-bottom:14px;">'
-    + '<div style="font-size:13px;font-weight:800;color:#2f6b3a;margin-bottom:5px;">'+escapeHtml(b.label)+'</div>'
-    + '<div style="display:flex;gap:8px;align-items:stretch;">'
-    +   '<div style="flex:1;background:#f1faf4;border:1px solid #c3ebcf;border-radius:10px;padding:10px 12px;font-size:14px;color:#2b3a2e;word-break:break-all;">'+escapeHtml(b.value||'-')+'</div>'
-    +   '<button class="btn-yellow claim-copy" data-i="'+i+'" style="padding:8px 14px;white-space:nowrap;">📋 คัดลอก</button>'
-    + '</div></div>'
-  ).join('');
+
+  // ข้อความชุดเดียว (นี่คือค่าที่จะถูกคัดลอก)
+  const combined = 'หัวบ้าน\n'+head+'\n\nลูกบ้าน\n'+tenant;
+
+  const html =
+    '<div style="text-align:left;">'
+    + '<div style="background:#f1faf4;border:1px solid #c3ebcf;border-radius:10px;'
+    +      'padding:12px 14px;font-size:14px;color:#2b3a2e;white-space:pre-wrap;'
+    +      'word-break:break-all;line-height:1.7;">'
+    +   escapeHtml(combined)
+    + '</div>'
+    + '<button class="btn-yellow claim-copy" style="margin-top:12px;width:100%;padding:10px;">📋 คัดลอกทั้งหมด</button>'
+    + '</div>';
 
   document.getElementById('popupIcon').className='popup-icon success';
   document.getElementById('popupIcon').textContent='✓';
@@ -1762,12 +1763,12 @@ function renderRoomPage(){
   popupCb = null;
   document.getElementById('popupBackdrop').style.display='block';
 
-  document.querySelectorAll('#popupMsg .claim-copy').forEach(btn=>{
+  const btn = document.querySelector('#popupMsg .claim-copy');
+  if(btn){
     btn.onclick = async ()=>{
-      const val = blocks[+btn.dataset.i].value || '';
-      try { await navigator.clipboard.writeText(val); }
+      try { await navigator.clipboard.writeText(combined); }
       catch(e){
-        const ta=document.createElement('textarea'); ta.value=val;
+        const ta=document.createElement('textarea'); ta.value=combined;
         document.body.appendChild(ta); ta.select();
         document.execCommand('copy'); document.body.removeChild(ta);
       }
@@ -1775,7 +1776,7 @@ function renderRoomPage(){
       btn.textContent = '✓ คัดลอกแล้ว';
       setTimeout(()=>{ btn.textContent = old; }, 1200);
     };
-  });
+  }
 }
     
     
