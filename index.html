@@ -1816,42 +1816,6 @@ function showClaimResult(row, newValue){
   return tr;
 }
 
-// เบิกห้องจากหน้าห้องว่าง — เหมือน quickEditCell แต่เด้ง popup สำเร็จ
-async function claimRoom(row, key, slotNo){
-  if(!canEdit()){ showPopup('ไม่มีสิทธิ์','บัญชีนี้ดูข้อมูลเท่านั้น','error'); return; }
-  const header = 'Use '+slotNo;
-  const email  = row.email || ('ID '+row.id);
-
-  const newValue = await editUseValue('เบิกห้อง: '+email+' ('+header+')', row[key]||'');
-  if(newValue===null) return;                       // กดยกเลิก
-  if(!isValidUseValue(newValue)){
-    showPopup('ใส่วันที่ด้วย','ช่อง '+header+' ต้องมีวันที่ต่อท้ายชื่อ\nเช่น "bestfortest 21/6/69"','error');
-    return;
-  }
-  if(String(newValue)===String(row[key]||'').trim()) return;   // ไม่เปลี่ยนอะไร
-
-  const oldRow = accountsRows.find(r=>r.id===row.id);
-  const payload={}; payload[key]=newValue;
-  const { error } = await sb.from('accounts').update(payload).eq('id', row.id);
-  if(error){ showPopup('เบิกห้องไม่สำเร็จ', error.message, 'error'); return; }
-
-  markSaved(row.id);
-  if(oldRow) await writeAudit('UPDATE', row.id, oldRow, Object.assign({}, oldRow, payload));
-  const idx = accountsRows.findIndex(r=>r.id===row.id);
-  if(idx>=0) accountsRows[idx] = Object.assign({}, accountsRows[idx], payload);
-  saveCache(getMaxUpdatedAt());
-  applySearch(); updateSummary();   // isRoomPage → รีเฟรชหน้าห้องว่าง (ห้องที่เบิกหายจากรายการ)
-
-  if(isEmptyUse(newValue)){
-    setStatus('ล้างห้อง '+header+' ของ '+email+' แล้ว');   // เผลอกด "เตะแล้ว" → ไม่เด้ง popup สำเร็จ
-  } else {
-    showPopup('เบิกห้องสำเร็จ 🎉',
-      'หัวบ้าน: '+email+'\nช่อง: '+header+'\nลูกค้า: '+newValue,
-      'success');
-  }
-}
-    
-  </script>
 <!-- ===== แชทในร้าน (staff chat) ===== -->
 <style>
   #shopChatBtn{position:fixed;left:22px;bottom:16px;z-index:400;border:none;cursor:pointer;
@@ -1865,23 +1829,38 @@ async function claimRoom(row, key, slotNo){
     background:#fff;border:2px solid #d7eede;border-radius:18px;box-shadow:0 16px 48px rgba(40,80,50,.25);
     display:none;flex-direction:column;overflow:hidden;}
   #shopChatPanel .hd{background:linear-gradient(180deg,#51cf66,#40c057);color:#fff;font-weight:800;
-    padding:10px 14px;display:flex;justify-content:space-between;align-items:center;}
-  #shopChatPanel .hd button{background:none;border:none;color:#fff;font-size:18px;cursor:pointer;}
+    padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  #shopChatPanel .hd .sp{flex:1;}
+  #shopChatPanel .hd button{background:none;border:none;color:#fff;font-size:18px;cursor:pointer;line-height:1;}
   #shopChatList{flex:1;overflow-y:auto;padding:12px;background:#f3fbf5;display:flex;flex-direction:column;gap:8px;}
   .scm{max-width:80%;padding:7px 11px;border-radius:14px;font-size:13px;line-height:1.4;word-break:break-word;}
   .scm .who{font-size:10px;font-weight:800;opacity:.7;margin-bottom:2px;}
   .scm .tm{font-size:9px;opacity:.55;margin-top:2px;text-align:right;}
   .scm.them{background:#fff;border:1px solid #e3efe7;align-self:flex-start;}
   .scm.me{background:#d8f3df;align-self:flex-end;}
-  #shopChatForm{display:flex;gap:6px;padding:10px;border-top:1px solid #e3efe7;}
+  #shopChatPicker{display:none;border-top:1px solid #e3efe7;background:#fafffb;}
+  #shopChatTabs{display:flex;gap:2px;padding:5px 6px 0;overflow-x:auto;}
+  #shopChatTabs button{border:none;background:none;cursor:pointer;font-size:18px;padding:3px 6px;border-radius:8px;opacity:.6;}
+  #shopChatTabs button.on{opacity:1;background:#e8f7ec;}
+  #shopChatGrid{display:grid;grid-template-columns:repeat(8,1fr);gap:1px;max-height:150px;overflow-y:auto;padding:6px;}
+  #shopChatGrid button{border:none;background:none;cursor:pointer;font-size:20px;padding:3px;border-radius:6px;}
+  #shopChatGrid button:hover{background:#e8f7ec;}
+  #shopChatForm{display:flex;gap:6px;padding:10px;border-top:1px solid #e3efe7;align-items:center;}
+  #shopChatEmojiBtn{border:none;background:none;cursor:pointer;font-size:22px;padding:0 2px;}
   #shopChatInput{flex:1;padding:9px 12px;border:2px solid #d7eede;border-radius:20px;font-family:inherit;font-size:14px;outline:none;}
   #shopChatInput:focus{border-color:#40c057;}
 </style>
 <button id="shopChatBtn" title="แชทในร้าน">💬<span id="shopChatBadge">0</span></button>
 <div id="shopChatPanel">
-  <div class="hd"><span>💬 แชทในร้าน</span><button onclick="scToggle(false)">✕</button></div>
+  <div class="hd">
+    <span>💬 แชทในร้าน</span><span class="sp"></span>
+    <button id="shopChatSound" title="เปิด/ปิดเสียง">🔊</button>
+    <button onclick="scToggle(false)" title="ปิด">✕</button>
+  </div>
   <div id="shopChatList"></div>
+  <div id="shopChatPicker"><div id="shopChatTabs"></div><div id="shopChatGrid"></div></div>
   <form id="shopChatForm" onsubmit="scSend(event)">
+    <button type="button" id="shopChatEmojiBtn" title="อีโมจิ">😊</button>
     <input id="shopChatInput" autocomplete="off" placeholder="พิมพ์ข้อความ...">
     <button type="submit" class="btn-primary" style="padding:9px 16px;">ส่ง</button>
   </form>
@@ -1889,7 +1868,19 @@ async function claimRoom(row, key, slotNo){
 <script>
 (function(){
   let scOpen=false, scUnread=0, scReady=false;
+  let scSound = localStorage.getItem('shopChatSound')!=='off';
   const $=id=>document.getElementById(id);
+
+  // อีโมจิเต็มชุด แบ่งหมวด (label = อีโมจิตัวแรกของหมวด)
+  const CATS={
+    '😀':'😀😃😄😁😆😅🤣😂🙂🙃😉😊😇🥰😍🤩😘😗😚😋😛😜🤪😝🤗🤭🤫🤔🤐🤨😐😑😶😏😒🙄😬😌😔😪🤤😴😷🤒🤕🤢🤮🤧🥵🥶🥴😵🤯🤠🥳😎🤓🧐😕😟🙁☹️😮😯😲😳🥺😦😧😨😰😥😢😭😱😖😣😞😓😩😫🥱😤😡😠🤬😈👿💀💩🤡👻👽',
+    '👍':'👍👎👌🤌🤏✌️🤞🤟🤘🤙👈👉👆👇☝️✋🤚🖐️🖖👋🤝🙏💪🦾👏🙌👐🤲🙋🙆🙅💁🤦🤷',
+    '❤️':'❤️🧡💛💚💙💜🖤🤍🤎💔❣️💕💞💓💗💖💘💝✨⭐🌟💫🔥💥💯✅❌⭕‼️❓❗🎉🎊🎁🎈',
+    '🐶':'🐶🐱🐭🐹🐰🦊🐻🐼🐨🐯🦁🐮🐷🐸🐵🐔🐧🐦🐤🦆🦅🦉🐺🐗🐴🦄🐝🐛🦋🐌🐞🐢🐍🐙🦀🐠🐟🐬🐳🦈🐊🐘🦒🦓🦍',
+    '🍎':'🍎🍐🍊🍋🍌🍉🍇🍓🍈🍒🍑🥭🍍🥥🥝🍅🥑🥦🌽🥕🥔🥐🍞🥖🧀🥚🍳🥞🧇🥓🍔🍟🍕🌭🥪🌮🌯🍜🍲🍛🍣🍱🍤🍙🍚🍥🥟🍦🍰🎂🍮🍭🍬🍫🍿🍩🍪☕🍵🧋🍺🍻🥂',
+    '⚽':'⚽🏀🏈⚾🎾🏐🎱🏓🏸🏆🥇🥈🥉🎯🎮🎲🎸🎹🎺🎻🥁🎤🎧🎬🎨🚗🚙🚕🚌🚑🚒✈️🚀⛵🏠⏰📱💻💡📌📎🔑🔒'
+  };
+
   window.scToggle=function(open){
     scOpen = open===undefined ? !scOpen : open;
     $('shopChatPanel').style.display = scOpen?'flex':'none';
@@ -1916,14 +1907,66 @@ async function claimRoom(row, key, slotNo){
   };
   $('shopChatBtn').onclick=()=>scToggle();
 
+  // ===== ปุ่มเปิด/ปิดเสียง =====
+  function scSoundBtn(){ $('shopChatSound').textContent = scSound?'🔊':'🔇'; }
+  $('shopChatSound').onclick=(e)=>{ e.stopPropagation();
+    scSound=!scSound; localStorage.setItem('shopChatSound', scSound?'on':'off'); scSoundBtn();
+    if(scSound) beep();   // ทดสอบเสียงตอนเปิด
+  };
+  scSoundBtn();
+
+  // ===== ตัวเลือกอีโมจิเต็มชุด =====
+  function scRenderGrid(cat){
+    const g=$('shopChatGrid'); g.innerHTML='';
+    Array.from(CATS[cat]).forEach(em=>{
+      const b=document.createElement('button'); b.type='button'; b.textContent=em;
+      b.onclick=()=>{ const i=$('shopChatInput'); i.value+=em; i.focus(); };
+      g.appendChild(b);
+    });
+  }
+  (function scBuildTabs(){
+    const tabs=$('shopChatTabs'); const keys=Object.keys(CATS);
+    keys.forEach((k,idx)=>{
+      const b=document.createElement('button'); b.type='button'; b.textContent=k;
+      if(idx===0) b.className='on';
+      b.onclick=()=>{ tabs.querySelectorAll('button').forEach(x=>x.className=''); b.className='on'; scRenderGrid(k); };
+      tabs.appendChild(b);
+    });
+    scRenderGrid(keys[0]);
+  })();
+  $('shopChatEmojiBtn').onclick=()=>{ const p=$('shopChatPicker');
+    p.style.display = p.style.display==='block' ? 'none' : 'block'; };
+
+  // ===== เสียงเตือน (WebAudio ไม่ต้องมีไฟล์) =====
+  let actx=null;
+  function beep(){
+    if(!scSound) return;
+    try{
+      actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+      const o=actx.createOscillator(), g=actx.createGain();
+      o.frequency.value=880; o.connect(g); g.connect(actx.destination);
+      g.gain.setValueAtTime(.15,actx.currentTime);
+      g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+.25);
+      o.start(); o.stop(actx.currentTime+.25);
+    }catch(e){}
+  }
+  function notify(m){
+    beep();
+    if('Notification' in window && Notification.permission==='granted'){
+      new Notification('💬 '+(m.name||m.username), { body:m.text });
+    }
+  }
+
   async function scInit(){
     if(scReady) return; scReady=true;
+    if('Notification' in window && Notification.permission==='default') Notification.requestPermission();
     const { data }=await sb.from('shop_chat').select('*').order('ts',{ascending:true}).limit(100);
     (data||[]).forEach(scAdd);
     sb.channel('shop-chat').on('postgres_changes',
       {event:'INSERT',schema:'public',table:'shop_chat'}, p=>{
+        const own = currentUser && p.new.username===currentUser.username;
         scAdd(p.new);
-        if(!scOpen && !(currentUser && p.new.username===currentUser.username)){ scUnread++; scBadge(); }
+        if(!own && (!scOpen || document.hidden)){ scUnread++; scBadge(); notify(p.new); }
       }).subscribe();
   }
   // ponytail: poll until login sets currentUser, then init once (avoids editing afterLogin)
