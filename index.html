@@ -1643,17 +1643,20 @@
   if(document.readyState!=='loading') setup(); else document.addEventListener('DOMContentLoaded', setup);
 })();
 
-/* ===== เบิกห้องว่าง (ห้องยึด) — เติมลูกค้าลงช่อง Use ที่ว่าง ===== */
+// กวาดหาช่อง Use ที่ว่าง — เฉพาะจากหัวบ้านที่ "ยังไม่หมดอายุ" เท่านั้น
 function collectEmptyRooms(){
+  const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
   const list = [];
   for(const row of accountsRows){
+    const d = extractDate(row.expire_date);
+    if(d && d.getTime() <= today.getTime()) continue;   // ⛔ หัวบ้านหมดอายุแล้ว — ข้ามไป ไม่เอาห้องมาเบิก
     for(const k of USE_KEYS){
       const v = String(row[k]||'').trim();
       if(v === 'ว่าง')   list.push({ row, key:k, kicked:true });   // ห้องยึด (ลูกค้าคืน/โดนเตะ)
-      else if(v === '')  list.push({ row, key:k, kicked:false });  // ช่องว่างเปล่า (ยังไม่เคยขาย)
+      else if(v === '')  list.push({ row, key:k, kicked:false });  // ช่องว่างเปล่า
     }
   }
-  return list;   // เรียงตาม id หัวบ้าน (accountsRows เรียง id อยู่แล้ว)
+  return list;
 }
 
 function openClaimRoom(){
