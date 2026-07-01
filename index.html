@@ -1476,6 +1476,7 @@
       if(!(idx>=0 && refreshRowDom(accountsRows[idx]))) applySearch();
       updateSummary();
       setStatus('แก้ไข '+header+' ของ ID '+row.id+' แล้ว');
+      return newvalue;
     }
 
     function startRealtime(){
@@ -1880,7 +1881,50 @@ function renderRoomPage(){
   if(wrap){ wrap.scrollTop = 0; renderWindow(); }
 }
 
-function buildRoomRow(item, idx){
+// popup แสดงผลหลังเบิกห้อง: หัวบ้าน + ลูกบ้าน พร้อมปุ่มคัดลอก
+  function showClaimResult(row, newValue){
+  const head = row.email || ('ID '+row.id);
+  const p = parseUseValue(newValue);
+  const tenant = [p.name, p.date].filter(Boolean).join(' ');   // ชื่อลูกค้า + วันที่
+  const blocks = [
+    { label:'หัวบ้าน', value: head },
+    { label:'ลูกบ้าน', value: tenant }
+  ];
+  const html = blocks.map((b,i)=>
+    '<div style="text-align:left;margin-bottom:14px;">'
+    + '<div style="font-size:13px;font-weight:800;color:#2f6b3a;margin-bottom:5px;">'+escapeHtml(b.label)+'</div>'
+    + '<div style="display:flex;gap:8px;align-items:stretch;">'
+    +   '<div style="flex:1;background:#f1faf4;border:1px solid #c3ebcf;border-radius:10px;padding:10px 12px;font-size:14px;color:#2b3a2e;word-break:break-all;">'+escapeHtml(b.value||'-')+'</div>'
+    +   '<button class="btn-yellow claim-copy" data-i="'+i+'" style="padding:8px 14px;white-space:nowrap;">📋 คัดลอก</button>'
+    + '</div></div>'
+  ).join('');
+
+  document.getElementById('popupIcon').className='popup-icon success';
+  document.getElementById('popupIcon').textContent='✓';
+  document.getElementById('popupTitle').textContent='เบิกห้องสำเร็จ';
+  document.getElementById('popupMsg').innerHTML = html;
+  document.getElementById('popupMsg').style.whiteSpace='normal';
+  popupCb = null;
+  document.getElementById('popupBackdrop').style.display='block';
+
+  document.querySelectorAll('#popupMsg .claim-copy').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const val = blocks[+btn.dataset.i].value || '';
+      try { await navigator.clipboard.writeText(val); }
+      catch(e){
+        const ta=document.createElement('textarea'); ta.value=val;
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+      }
+      const old = btn.textContent;
+      btn.textContent = '✓ คัดลอกแล้ว';
+      setTimeout(()=>{ btn.textContent = old; }, 1200);
+    };
+  });
+}
+    
+    
+  function buildRoomRow(item, idx){
   const { row, key, kicked } = item;
   const n = USE_KEYS.indexOf(key)+1;
   const tr = document.createElement('tr'); tr._row = row;
@@ -1908,7 +1952,14 @@ function buildRoomRow(item, idx){
   if(canEdit()){
     const b=document.createElement('button'); b.className='btn-yellow'; b.textContent='เบิกห้อง';
     // ใช้ตัวแก้ช่อง Use เดิม (มีปุ่มร้าน + ชื่อ + วันที่ + เตะแล้ว) → บันทึก+audit+cache ครบเหมือนเดิม
-    b.onclick=()=>quickEditCell(row, key, 'Use '+n, row[key]||'');
+ 
+  b.onclick=async ()=>{
+      const nv = await quickEditCell(row, key, 'Use '+n, row[key]||'');
+      if(nv && String(nv).trim() && String(nv).trim()!=='ว่าง'){
+        showClaimResult(row, nv);
+      }
+    };
+    
     tdAct.appendChild(b);
   } else {
     tdAct.textContent='ดูเท่านั้น';
