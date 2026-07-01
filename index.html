@@ -273,7 +273,6 @@
           </div>
           <div class="topbar-actions">
             <button class="btn-yellow" onclick="openGiftCard()">🎁 เบิก gift card</button>
-            <button id="roomPageBtn" class="btn-primary" onclick="toggleRoomPage()">🏠 หน้าห้องว่าง</button>
             <button id="manageUsersBtn" class="btn-gray" style="display:none;" onclick="openUserModal()">จัดการผู้ใช้</button>
             <button id="auditBtn" class="btn-gray" style="display:none;" onclick="openAuditModal()">ประวัติ</button>
             <button id="addBtn" class="btn-blue" onclick="openAddModal()">+ เพิ่มข้อมูล</button>
@@ -350,7 +349,7 @@
           </div>
           <input id="searchInput" class="search-input" type="text" placeholder="ค้นหาทั่วไป เช่น อีเมล, เครื่อง, เบอร์" oninput="applySearch()" onkeydown="if(event.key==='Enter')applySearch()">
           <div class="filter-group">
-            <label class="chk-label"><input id="chkEmptyHB" type="checkbox" onchange="applySearch()">หัวบ้านว่าง</label>
+            <button id="roomPageBtn" class="btn-primary" onclick="toggleRoomPage()">🏠 เบิกห้องว่าง</button>
             <label class="chk-label"><input id="chkUseDate" type="checkbox" onchange="applySearch()">ค้นจากวันที่ (Use 1-5)</label>
             <label class="chk-label"><input id="chkMachine" type="checkbox" onchange="applySearch()">ค้นจากเครื่อง</label>
             <button class="btn-gray" onclick="clearSearch()">ล้างผลค้นหา</button>
@@ -937,7 +936,6 @@
       const keyword=document.getElementById('searchInput').value.trim().toLowerCase();
       const chkMachine=document.getElementById('chkMachine').checked;
       const chkUseDate=document.getElementById('chkUseDate').checked;
-      const chkEmptyHB=document.getElementById('chkEmptyHB').checked;
       const dateStr=document.getElementById('searchDateInput').value;
       let selectedDate=null; if(dateStr){const p=dateStr.split('-'); selectedDate=new Date(+p[0],+p[1]-1,+p[2]);}
       const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
@@ -945,11 +943,8 @@
       // หน้าแรกว่าง — แสดงข้อมูลก็ต่อเมื่อมีการค้นหา/กรองที่ยืนได้ด้วยตัวเอง
       // (chkUseDate / chkMachine เป็นแค่ตัวปรับการค้นหา ต้องมีคำค้นด้วยถึงจะนับ)
       // ตัวกรอง/คำค้นเปลี่ยนไหม → ถ้าเปลี่ยน = ค้นหาใหม่ ค่อยเด้งขึ้นบน
-      const filterSig = JSON.stringify([keyword, dateStr, chkMachine, chkUseDate, chkEmptyHB, isExpiredPage]);
       const resetScroll = (filterSig !== lastFilterSig);
       lastFilterSig = filterSig;
-
-      const hasFilter = !!(keyword || dateStr || chkEmptyHB || isExpiredPage);
       if(!hasFilter){
         renderTable(accountsRows, { resetScroll });   // แสดงทั้งหมด — เบาเพราะ virtual scroll
         return;
@@ -967,7 +962,6 @@
         }
         if(isExpiredPage){ const d=extractDate(row.expire_date); if(!d||d.getTime()>today.getTime()) return false; }
         if(selectedDate){ const d=extractDate(row.expire_date); if(!d||d.getTime()!==selectedDate.getTime()) return false; }
-        if(chkEmptyHB && !rowHasEmptyHB(row)) return false;
         return true;
       });
       if(isExpiredPage) result.sort((a,b)=>{const da=extractDate(a.expire_date),db=extractDate(b.expire_date);return (da?da.getTime():0)-(db?db.getTime():0);});
@@ -986,7 +980,6 @@
     function clearSearch(){
       document.getElementById('searchInput').value=''; document.getElementById('searchDateInput').value='';
       document.getElementById('chkMachine').checked=false; document.getElementById('chkUseDate').checked=false;
-      document.getElementById('chkEmptyHB').checked=false;
       applySearch(); setStatus('ล้างผลค้นหาแล้ว');
     }
     function toggleExpiredPage(){
