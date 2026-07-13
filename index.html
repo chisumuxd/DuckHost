@@ -1165,6 +1165,11 @@
       hr.appendChild(thNo);
       DISPLAY_FIELDS.forEach(f=>{
         const th=document.createElement('th'); th.textContent=f.header;
+        if(f.key==='expire_date'){
+          th.style.cursor='pointer'; th.title='คลิกเพื่อเรียงตามวันหมดอายุ';
+          if(expireSort) th.textContent = f.header + (expireSort==='asc' ? ' ▲' : ' ▼');
+          th.onclick=()=>{ expireSort = expireSort==='asc' ? 'desc' : (expireSort==='desc' ? null : 'asc'); applySearch(); };
+        }
         if(f.width){ th.style.width=f.width+'px'; th.style.minWidth=f.width+'px'; th.style.maxWidth=f.width+'px'; }
         hr.appendChild(th);
       });
