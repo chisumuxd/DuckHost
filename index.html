@@ -575,6 +575,20 @@
 
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     let currentUser = null, accountsRows = [], realtimeChannel = null, isExpiredPage = false;
+    let expireSort = null;   // null | 'asc' | 'desc' — เรียงตามวันหมดอายุ
+    // เรียงตามวันหมดอายุ (คืน copy ใหม่ ไม่แตะ array เดิม) — แถวไม่มีวันที่ไปท้ายเสมอ
+    function sortedForDisplay(rows){
+      if(!expireSort) return rows;
+      const dir = expireSort==='asc' ? 1 : -1;
+      return rows.slice().sort((a,b)=>{
+        const da=extractDate(a.expire_date), db=extractDate(b.expire_date);
+        const ta=da?da.getTime():null, tb=db?db.getTime():null;
+        if(ta===null && tb===null) return 0;
+        if(ta===null) return 1;
+        if(tb===null) return -1;
+        return (ta-tb)*dir;
+      });
+    }
     let currentMode = 'edit', editingId = null, popupCb = null;
     let syncing = false, lastAutoSync = 0, autoSyncTimer = null;
     const recentlySaved = new Map();   // id -> เวลาที่เราบันทึกเอง (กัน render ซ้ำตอน realtime เด้งกลับ)
@@ -996,13 +1010,13 @@
       let selectedDate=null; if(dateStr){const p=dateStr.split('-'); selectedDate=new Date(+p[0],+p[1]-1,+p[2]);}
       const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
 
-      const filterSig = JSON.stringify([keyword, dateStr, chkMachine, chkUseDate, isExpiredPage]);
+      const filterSig = JSON.stringify([keyword, dateStr, chkMachine, chkUseDate, isExpiredPage, expireSort]);
       const resetScroll = (filterSig !== lastFilterSig);
       lastFilterSig = filterSig;
 
       const hasFilter = !!(keyword || dateStr || isExpiredPage);
       if(!hasFilter){
-        renderTable(accountsRows, { resetScroll });   // แสดงทั้งหมด — เบาเพราะ virtual scroll
+        renderTable(sortedForDisplay(accountsRows), { resetScroll });   // แสดงทั้งหมด — เบาเพราะ virtual scroll
         return;
       }
 
@@ -1020,8 +1034,8 @@
         if(selectedDate){ const d=extractDate(row.expire_date); if(!d||d.getTime()!==selectedDate.getTime()) return false; }
         return true;
       });
-      if(isExpiredPage) result.sort((a,b)=>{const da=extractDate(a.expire_date),db=extractDate(b.expire_date);return (da?da.getTime():0)-(db?db.getTime():0);});
-      renderTable(result,{chkUseDate,keyword,resetScroll});
+      if(isExpiredPage && !expireSort) result.sort((a,b)=>{const da=extractDate(a.expire_date),db=extractDate(b.expire_date);return (da?da.getTime():0)-(db?db.getTime():0);});
+      renderTable(sortedForDisplay(result),{chkUseDate,keyword,resetScroll});
     }
 
     function rowSearchText(row){ return FORM_FIELDS.map(f=>row[f.key]||'').join(' ').toLowerCase(); }
