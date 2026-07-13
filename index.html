@@ -243,7 +243,52 @@
 
     body { margin: 0; }
     .container { width: 100% !important; max-width: none !important; margin: 0 !important; padding: 8px !important; }
-    
+
+    /* ===== DARK MODE (เปิดเมื่อ body.dark — โหมดสว่างไม่กระทบ) ===== */
+    body.dark{ background:#15181c; color:#dfe6ea; }
+    body.dark .card{ background:#20262c; border-color:#2c333a; box-shadow:0 6px 22px rgba(0,0,0,0.35); }
+    body.dark #pageTitle{ color:#69db7c; }
+    body.dark .user-badge{ background:#3a3320; color:#ffd43b; border-color:#5c4a10; }
+    body.dark .role-badge{ background:#1c2b3a; color:#74c0fc; border-color:#274b6b; }
+    body.dark .live-dot{ color:#9aa5ad; }
+    body.dark .btn-gray{ background:linear-gradient(180deg,#3a424a,#2c333a); color:#cdd5db; box-shadow:0 4px 0 #14181c; }
+
+    body.dark #summaryBar .summary-box{ border-color:rgba(255,255,255,0.06); box-shadow:0 6px 16px rgba(0,0,0,0.30); }
+    body.dark #summaryBar .summary-box:nth-child(1){ background:#1c2b3a !important; color:#74c0fc !important; }
+    body.dark #summaryBar .summary-box:nth-child(2){ background:#1a2e20 !important; color:#69db7c !important; }
+    body.dark #summaryBar .summary-box:nth-child(3){ background:#33201f !important; color:#ff8787 !important; }
+    body.dark #summaryBar .summary-box:nth-child(4){ background:#332c17 !important; color:#ffd43b !important; }
+
+    body.dark .search-row{ border-top-color:#4a4020; }
+    body.dark .search-input{ background:#252b31; border-color:#4a4020; color:#e8eef0; }
+    body.dark .filter-group input[type=date]{ background:#252b31; border-color:#4a4020; color:#e8eef0; }
+    body.dark .chk-label{ background:#1e2a22; border-color:#2f5138; color:#8ce99a; }
+    body.dark .status-msg{ color:#9aa5ad; }
+
+    body.dark .table-wrap{ background:#20262c; border-color:#2c333a; }
+    body.dark td{ color:#dfe6ea; border-right-color:#2a3138; }
+    body.dark tbody tr{ border-bottom-color:#2a3138; }
+    body.dark tbody tr:hover{ background:#283039 !important; }
+    body.dark td.cellcolor{ color:#161616 !important; }
+
+    body.dark .modal{ background:#20262c; border-color:#2c333a; color:#dfe6ea; }
+    body.dark .modal-title,body.dark .popup-title,body.dark .login-wrap h1{ color:#69db7c; }
+    body.dark .modal-alert{ background:#3a3320; color:#ffd43b; border-color:#5c4a10; }
+    body.dark .popup-box{ background:#20262c; border-color:#2c333a; }
+    body.dark .popup-msg{ color:#cdd5db; }
+    body.dark .form-group label,body.dark .field label{ color:#8ce99a; }
+    body.dark .form-group input,body.dark .form-group select,body.dark .form-group textarea,
+    body.dark .field input{ background:#252b31; border-color:#2c333a; color:#e8eef0; }
+    body.dark .modal [style*="color:#666"],body.dark .modal [style*="color:#888"]{ color:#9aa5ad !important; }
+
+    /* แถบเลื่อนสีเข้มในโหมดมืด */
+    body.dark ::-webkit-scrollbar{ width:12px; height:12px; }
+    body.dark ::-webkit-scrollbar-track{ background:#15181c; }
+    body.dark ::-webkit-scrollbar-thumb{ background:#3a424a; border-radius:7px; border:2px solid #15181c; }
+    body.dark ::-webkit-scrollbar-thumb:hover{ background:#4a545e; }
+    body.dark ::-webkit-scrollbar-corner{ background:#15181c; }
+    body.dark{ scrollbar-color:#3a424a #15181c; scrollbar-width:thin; }
+
   </style>
 </head>
 <body>
@@ -276,6 +321,7 @@
             <button id="manageUsersBtn" class="btn-gray" style="display:none;" onclick="openUserModal()">จัดการผู้ใช้</button>
             <button id="auditBtn" class="btn-gray" style="display:none;" onclick="openAuditModal()">ประวัติ</button>
             <button id="addBtn" class="btn-blue" onclick="openAddModal()">+ เพิ่มข้อมูล</button>
+            <button id="darkToggle" class="btn-gray" onclick="toggleDark()" title="สลับโหมดมืด/สว่าง">🌙</button>
             <button class="btn-gray" onclick="forceReload()" title="ล้าง cache แล้วโหลดใหม่ทั้งหมด">↻ โหลดใหม่</button>
             <button class="btn-gray" onclick="doLogout()">ออกจากระบบ</button>
           </div>
@@ -442,7 +488,7 @@
     </div>
   </div>
 
-  <div id="ctxMenu" style="display:none; position:fixed; z-index:9998; background:#fff; border:1px solid #ccc; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,0.2); padding:4px; min-width:140px;">
+  <div id="ctxMenu" style="display:none; position:fixed; z-index:9998; background:#fff; color:#222; border:1px solid #ccc; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,0.2); padding:4px; min-width:140px;">
     <div id="ctxCopy" style="padding:9px 14px; cursor:pointer; font-size:14px; border-radius:6px;">📋 คัดลอกช่องนี้</div>
     <div id="ctxHistory" style="padding:9px 14px; cursor:pointer; font-size:14px; border-radius:6px;">🕒 ดูประวัติช่องนี้</div>
   </div>
@@ -749,6 +795,16 @@
       await loadMachineOptions();
       showApp(); initTableHandlers(); await loadAccounts(); startRealtime(); startAutoSync();
     }
+    // ===== DARK MODE toggle =====
+    function applyDark(on){
+      document.body.classList.toggle('dark', on);
+      const b=document.getElementById('darkToggle');
+      if(b) b.textContent = on ? '☀️' : '🌙';
+      try{ localStorage.setItem('duck_dark', on ? '1' : '0'); }catch(e){}
+    }
+    function toggleDark(){ applyDark(!document.body.classList.contains('dark')); }
+    (function(){ let v=null; try{ v=localStorage.getItem('duck_dark'); }catch(e){} applyDark(v==='1'); })();
+
     function canEdit(){ return currentUser && (currentUser.role==='ADMIN' || currentUser.role==='EDITOR'); }
     function isAdmin(){ return currentUser && currentUser.role==='ADMIN'; }
 
@@ -1032,8 +1088,8 @@
         if(USE_KEYS.includes(f.key)) td.classList.add('use-cell');
         else if(f.key==='machine') td.classList.add('machine-cell');
         if(editable) td.classList.add('editable');
-        if(f.dateUser){ const c=dateColor(value,true); if(c) td.style.backgroundColor=c; }
-        else if(f.dateExpire){ const c=dateColor(value,false); if(c) td.style.backgroundColor=c; }
+        if(f.dateUser){ const c=dateColor(value,true); if(c){ td.style.backgroundColor=c; td.classList.add('cellcolor'); } }
+        else if(f.dateExpire){ const c=dateColor(value,false); if(c){ td.style.backgroundColor=c; td.classList.add('cellcolor'); } }
         tr.appendChild(td);
       });
 
@@ -1788,7 +1844,7 @@ function showClaimResult(row, newValue){
     } else {
       const value=row[f.key]||'';
       td.textContent=value;
-      if(f.dateExpire){ const c=dateColor(value,false); if(c) td.style.backgroundColor=c; }
+      if(f.dateExpire){ const c=dateColor(value,false); if(c){ td.style.backgroundColor=c; td.classList.add('cellcolor'); } }
     }
     tr.appendChild(td);
   });
