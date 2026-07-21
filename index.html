@@ -1089,7 +1089,7 @@
 
     // ===== /CACHE =====
 
-    const MACHINE_EXCLUDE = ['Nu', 'fluk', 'Pop'];   // ชื่อที่ไม่ให้โผล่ในตัวเลือก "เครื่อง" — เพิ่ม/ลบชื่อได้ที่นี่ (ตรงตัวพิมพ์)
+    const MACHINE_EXCLUDE = ['Nu', 'NuKinG'];   // ชื่อที่ไม่ให้โผล่ในตัวเลือก "เครื่อง" — เพิ่ม/ลบชื่อได้ที่นี่ (ตรงตัวพิมพ์)
 
     async function loadMachineOptions(){
       const { data, error } = await sb.from('user_profiles').select('username,name').order('name',{ascending:true});
