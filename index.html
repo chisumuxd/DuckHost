@@ -500,9 +500,9 @@
     const LOGIN_DOMAIN = 'duck.local';
 
     // คอลัมน์ที่ดึงจาก DB (ระบุชัด ไม่ใช้ * เพื่อลด egress)
-    const COLS = 'id,email,pass,use1,use2,use3,use4,use5,machine,contact,expire_date,status,credit,fill_date,apple_email,apple_pass,mail_birth,ios_verify,phone_owner,note,updated_at';
+    const COLS = 'id,email,pass,use1,use2,use3,use4,use5,machine,contact,expire_date,status,credit,fill_date,apple_email,apple_pass,mail_birth,ios_verify,phone_owner,note,credit_deducted_for,updated_at';
     // cache key — เปลี่ยนเลขเวอร์ชันเมื่อ schema เปลี่ยน
-    const CACHE_KEY = 'duck_v1';
+    const CACHE_KEY = 'duck_v2';
 
     const DROPDOWN_OPTIONS = { status: ['เติมโค้ดแล้ว', 'ยังไม่เติม', 'ติดต่อไม่ได้', 'ปิดย้าย', 'ไนจีเรีย'] };
     const STORE_OPTIONS = ['Duck', 'Indy'];   // ร้านสำหรับช่อง Use 1-5 (เพิ่มชื่อร้านได้ที่นี่)
@@ -588,6 +588,50 @@
         if(tb===null) return -1;
         return (ta-tb)*dir;
       });
+    }
+
+    // ===== หักเครดิตอัตโนมัติเมื่อเลยวันหมดอายุ =====
+    const EXPIRE_CREDIT_DEDUCT = 389;   // หักคงที่เมื่อเลยวันหมดอายุ (แก้ตัวเลขตรงนี้)
+    // เลยวันหมดอายุ (วันนี้ > วันหมดอายุ) → หัก 389 ครั้งเดียวต่อรอบ
+    // credit_deducted_for เก็บวันหมดอายุ (YYYY-MM-DD) ที่หักไปแล้ว → เติมโค้ดต่ออายุ = วันใหม่ = หักได้อีกรอบ
+    // ต้องเพิ่มคอลัมน์ก่อน: รัน add_credit_deducted_for.sql ใน Supabase
+    // ponytail: รันตอนโหลด/ล็อกอิน ไม่ใช่ cron — เปิดหน้าค้างข้ามเที่ยงคืนต้องรีเฟรชถึงหัก; ต้องเป๊ะย้ายไป pg_cron
+    async function applyExpiredCreditDeductions(){
+      if(!canEdit()) return;   // เฉพาะคนที่แก้ได้ (guard ที่ DB กันหักซ้ำข้ามเครื่องอยู่แล้ว)
+      const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+      const targets=[];
+      accountsRows.forEach(row=>{
+        const d=extractDate(row.expire_date);
+        if(!d || d.getTime()>=today.getTime()) return;                 // ยังไม่เลยวันหมดอายุ
+        const expKey=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+        if(String(row.credit_deducted_for||'')===expKey) return;        // หักรอบนี้ไปแล้ว
+        if(!Number.isFinite(Number(String(row.credit).trim()))) return; // เครดิตไม่ใช่ตัวเลข ข้าม
+        targets.push({row, expKey});
+      });
+      if(!targets.length) return;
+      let done=0;
+      for(const {row, expKey} of targets){
+        const oldRow={...row};
+        const newCredit=Number(String(row.credit).trim())-EXPIRE_CREDIT_DEDUCT;
+        // guard: อัปเดตเฉพาะแถวที่ยังไม่ถูกหักรอบนี้ → เครื่องอื่นหักไปแล้วจะได้ 0 แถว ไม่หักซ้ำ
+        const { data, error } = await sb.from('accounts')
+          .update({ credit:newCredit, credit_deducted_for:expKey })
+          .eq('id',row.id)
+          .or('credit_deducted_for.is.null,credit_deducted_for.neq.'+expKey)
+          .select(COLS);
+        if(error) continue;
+        const i=accountsRows.findIndex(r=>r.id===row.id);
+        if(!data || !data.length){                        // เครื่องอื่นหักไปแล้ว — กันเราลองซ้ำ (ค่าจริง sync รอบถัดไป)
+          if(i>=0) accountsRows[i].credit_deducted_for=expKey;
+          continue;
+        }
+        markSaved(row.id);
+        if(i>=0) accountsRows[i]=data[0];
+        await writeAudit('UPDATE', row.id, oldRow, data[0]);
+        done++;
+      }
+      if(done>0){ saveCache(getMaxUpdatedAt()); applySearch(); updateSummary();
+        setStatus('หักเครดิต '+EXPIRE_CREDIT_DEDUCT+' อัตโนมัติ '+done+' รายการ (เลยวันหมดอายุ)'); }
     }
     let currentMode = 'edit', editingId = null, popupCb = null;
     let syncing = false, lastAutoSync = 0, autoSyncTimer = null;
@@ -807,7 +851,7 @@
       document.getElementById('manageUsersBtn').style.display = (currentUser.role==='ADMIN') ? 'inline-block' : 'none';
       document.getElementById('auditBtn').style.display = (currentUser.role==='ADMIN') ? 'inline-block' : 'none';
       await loadMachineOptions();
-      showApp(); initTableHandlers(); await loadAccounts(); startRealtime(); startAutoSync();
+      showApp(); initTableHandlers(); await loadAccounts(); await applyExpiredCreditDeductions(); startRealtime(); startAutoSync();
     }
     // ===== DARK MODE toggle =====
     function applyDark(on){
