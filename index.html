@@ -430,7 +430,7 @@
   </div>
 
   <div id="userModalBackdrop" class="modal-backdrop">
-    <div class="modal">
+    <div class="modal" style="width:min(96vw,980px); max-width:none;">
       <div class="modal-header">
         <div class="modal-title">จัดการผู้ใช้</div>
         <button class="btn-red" onclick="closeUserModal()">ปิด</button>
@@ -438,10 +438,11 @@
       <div id="userModalAlert" class="modal-alert"></div>
       <div style="font-size:13px; color:#666; margin-bottom:12px; line-height:1.6;">
         ADMIN = จัดการผู้ใช้ + แก้ไขข้อมูล &nbsp;|&nbsp; EDITOR = แก้ไขข้อมูล &nbsp;|&nbsp; VIEWER = ดูอย่างเดียว<br>
-        <b>หมายเหตุ:</b> การสร้างบัญชีใหม่/ลบบัญชี ทำที่ Supabase Dashboard → Authentication
+        <b>หมายเหตุ:</b> เพิ่มผู้ใช้ใหม่ = ระบบสร้างบัญชีให้อัตโนมัติ (ใส่ username + รหัสผ่าน) &nbsp;|&nbsp; การลบบัญชีถาวร ทำที่ Supabase Dashboard → Authentication
       </div>
-      <div class="form-grid" style="grid-template-columns:repeat(4,1fr); align-items:end;">
+      <div class="form-grid" style="grid-template-columns:repeat(5,1fr); align-items:end;">
         <div class="form-group"><label>Username</label><input id="uUsername" type="text" placeholder="เช่น staff1"></div>
+        <div class="form-group"><label>รหัสผ่าน <span class="hint-red">*ตอนสร้างใหม่</span></label><input id="uPassword" type="text" placeholder="อย่างน้อย 6 ตัว"></div>
         <div class="form-group"><label>ชื่อ</label><input id="uName" type="text"></div>
         <div class="form-group"><label>บทบาท</label>
           <select id="uRole"><option value="EDITOR">EDITOR</option><option value="VIEWER">VIEWER</option><option value="ADMIN">ADMIN</option></select></div>
@@ -455,8 +456,14 @@
         <button class="btn-gray" onclick="loadUsers()">รีเฟรชรายชื่อ</button>
       </div>
       <div class="table-wrap" style="margin-top:14px; max-height:45vh;">
-        <table style="min-width:700px;">
-          <thead><tr><th>Username</th><th>ชื่อ</th><th>บทบาท</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+        <table id="userTable" style="width:100%; table-layout:fixed;">
+          <thead><tr>
+            <th style="width:24%;">Username</th>
+            <th style="width:16%;">ชื่อ</th>
+            <th style="width:16%;">บทบาท</th>
+            <th style="width:16%;">สถานะ</th>
+            <th style="width:28%;">จัดการ</th>
+          </tr></thead>
           <tbody id="userTableBody"></tbody>
         </table>
       </div>
@@ -574,6 +581,18 @@
     const USE_KEYS = ['use1','use2','use3','use4','use5'];
 
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // client แยกสำหรับสร้างบัญชีใหม่ (signUp) — persistSession:false + storageKey ต่างหาก
+    // กันไม่ให้ session แอดมินที่ล็อกอินอยู่ ถูกสลับไปเป็น user ที่เพิ่งสร้าง
+    let signupClient = null;
+    function getSignupClient(){
+      if(!signupClient){
+        signupClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          auth: { persistSession:false, autoRefreshToken:false, storageKey:'sb-signup-temp' }
+        });
+      }
+      return signupClient;
+    }
     let currentUser = null, accountsRows = [], realtimeChannel = null, isExpiredPage = false;
     let expireSort = null;   // null | 'asc' | 'desc' — เรียงตามวันหมดอายุ
     // เรียงตามวันหมดอายุ (คืน copy ใหม่ ไม่แตะ array เดิม) — แถวไม่มีวันที่ไปท้ายเสมอ
@@ -677,6 +696,43 @@
       document.getElementById('popupBackdrop').style.display='block';
     }
     function closePopup(){ document.getElementById('popupBackdrop').style.display='none'; if(popupCb){const c=popupCb;popupCb=null;c();} }
+
+    // เลือกได้หลายอัน — ค่าเก็บเป็น "ชื่อ1, ชื่อ2" (คั่นด้วย , )
+    function pickMultiFromList(title, options, currentValue){
+      return new Promise(resolve=>{
+        const selected = new Set(String(currentValue||'').split(',').map(s=>s.trim()).filter(Boolean));
+        const backdrop=document.createElement('div');
+        backdrop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
+        const box=document.createElement('div');
+        box.style.cssText='background:#fff;max-width:380px;width:100%;margin:12vh auto 0;border-radius:18px;padding:20px;box-shadow:0 18px 45px rgba(0,0,0,0.28);';
+        const h=document.createElement('div'); h.textContent=title;
+        h.style.cssText='font-size:17px;font-weight:800;color:#0f5132;margin-bottom:4px;'; box.appendChild(h);
+        const hint=document.createElement('div'); hint.textContent='เลือกได้หลายอัน (กดสลับเลือก/ยกเลิก)';
+        hint.style.cssText='font-size:12px;color:#777;margin-bottom:12px;'; box.appendChild(hint);
+        function paint(b,on,opt){ b.textContent=(on?'✓ ':'')+opt;
+          b.style.cssText='display:block;width:100%;text-align:left;margin-bottom:8px;padding:12px 14px;border-radius:10px;border:2px solid '+(on?'#198754':'#ccc')+';background:'+(on?'#eefaf2':'#fff')+';font-size:15px;font-weight:'+(on?'700':'500')+';cursor:pointer;color:#222;'; }
+        options.forEach(opt=>{
+          const name=String(opt).trim();
+          const b=document.createElement('button'); paint(b, selected.has(name), opt);
+          b.onclick=()=>{ selected.has(name) ? selected.delete(name) : selected.add(name); paint(b, selected.has(name), opt); };
+          box.appendChild(b);
+        });
+        const footer=document.createElement('div'); footer.style.cssText='display:flex;gap:10px;margin-top:6px;';
+        const okBtn=document.createElement('button'); okBtn.textContent='ตกลง';
+        okBtn.style.cssText='flex:1;padding:11px;border-radius:10px;border:none;background:#198754;color:#fff;font-weight:700;cursor:pointer;';
+        okBtn.onclick=()=>{ document.body.removeChild(backdrop); resolve(Array.from(selected).join(', ')); };
+        const clearBtn=document.createElement('button'); clearBtn.textContent='ลบค่า (เว้นว่าง)';
+        clearBtn.style.cssText='flex:1;padding:11px;border-radius:10px;border:none;background:#ffc107;color:#222;font-weight:700;cursor:pointer;';
+        clearBtn.onclick=()=>{ document.body.removeChild(backdrop); resolve(''); };
+        const cancelBtn=document.createElement('button'); cancelBtn.textContent='ยกเลิก';
+        cancelBtn.style.cssText='flex:1;padding:11px;border-radius:10px;border:none;background:#6c757d;color:#fff;font-weight:700;cursor:pointer;';
+        cancelBtn.onclick=()=>{ document.body.removeChild(backdrop); resolve(null); };
+        footer.appendChild(okBtn); footer.appendChild(clearBtn); footer.appendChild(cancelBtn); box.appendChild(footer);
+        backdrop.appendChild(box);
+        backdrop.onclick=(e)=>{ if(e.target===backdrop){ document.body.removeChild(backdrop); resolve(null); } };
+        document.body.appendChild(backdrop);
+      });
+    }
 
     function pickFromList(title, options, currentValue){
       return new Promise(resolve=>{
@@ -1033,7 +1089,7 @@
 
     // ===== /CACHE =====
 
-    const MACHINE_EXCLUDE = ['Nu'];
+    const MACHINE_EXCLUDE = ['Nu', 'fluk', 'Pop'];   // ชื่อที่ไม่ให้โผล่ในตัวเลือก "เครื่อง" — เพิ่ม/ลบชื่อได้ที่นี่ (ตรงตัวพิมพ์)
 
     async function loadMachineOptions(){
       const { data, error } = await sb.from('user_profiles').select('username,name').order('name',{ascending:true});
@@ -1456,12 +1512,16 @@
     function resetUserForm(){
       editingUserId=null;
       document.getElementById('uUsername').value=''; document.getElementById('uName').value='';
+      document.getElementById('uPassword').value=''; document.getElementById('uPassword').disabled=false;
+      document.getElementById('uPassword').placeholder='อย่างน้อย 6 ตัว';
       document.getElementById('uRole').value='EDITOR'; document.getElementById('uStatus').value='ACTIVE';
       document.getElementById('uSaveBtn').textContent='บันทึก'; document.getElementById('uUsername').disabled=false;
     }
     function editUser(u){
       editingUserId=u.id;
       document.getElementById('uUsername').value=u.username||''; document.getElementById('uName').value=u.name||'';
+      document.getElementById('uPassword').value=''; document.getElementById('uPassword').disabled=false;
+      document.getElementById('uPassword').placeholder='เว้นว่าง = ไม่เปลี่ยนรหัส';
       document.getElementById('uRole').value=u.role||'EDITOR'; document.getElementById('uStatus').value=u.status||'ACTIVE';
       document.getElementById('uSaveBtn').textContent='บันทึกการแก้ไข'; document.getElementById('uUsername').disabled=false;
     }
@@ -1473,18 +1533,55 @@
       const status=document.getElementById('uStatus').value;
       if(!username){ showUserAlert('กรุณาใส่ username'); return; }
       if(editingUserId){
+        const newPassword=document.getElementById('uPassword').value;
+        if(newPassword && newPassword.length < 6){ showUserAlert('รหัสผ่านต้องอย่างน้อย 6 ตัวอักษร (หรือเว้นว่างถ้าไม่เปลี่ยน)'); return; }
+        const saveBtn=document.getElementById('uSaveBtn'); saveBtn.disabled=true; saveBtn.textContent='กำลังบันทึก...';
+
         const { error }=await sb.from('user_profiles').update({ username, name, role, status, updated_by: currentUser.username, updated_at: new Date().toISOString() }).eq('id', editingUserId);
-        if(error){ showUserAlert('บันทึกไม่สำเร็จ: '+error.message); return; }
+        if(error){ saveBtn.disabled=false; saveBtn.textContent='บันทึกการแก้ไข'; showUserAlert('บันทึกไม่สำเร็จ: '+error.message); return; }
+
+        // เปลี่ยนรหัสผ่าน (ถ้ากรอก) ผ่าน Edge Function admin-set-password
+        if(newPassword){
+          const resp=await sb.functions.invoke('admin-set-password', { body:{ targetId: editingUserId, newPassword } });
+          let pwMsg='';
+          if(resp.error){ pwMsg=resp.error.message||'error'; try{ const c=await resp.error.context.json(); if(c&&c.error) pwMsg=c.error; }catch(e){} }
+          else if(resp.data && resp.data.error){ pwMsg=resp.data.error; }
+          if(pwMsg){ saveBtn.disabled=false; saveBtn.textContent='บันทึกการแก้ไข'; await loadUsers();
+            showUserAlert('แก้ข้อมูลแล้ว แต่เปลี่ยนรหัสไม่สำเร็จ: '+pwMsg+'\n(ตรวจว่า deploy Edge Function "admin-set-password" แล้ว)'); return; }
+        }
+
+        saveBtn.disabled=false; saveBtn.textContent='บันทึกการแก้ไข';
         resetUserForm(); await loadUsers(); await loadMachineOptions();
-        showPopup('บันทึกสำเร็จ','แก้ไขผู้ใช้แล้ว','success');
+        showPopup('บันทึกสำเร็จ', newPassword ? 'แก้ไขผู้ใช้ + เปลี่ยนรหัสผ่านแล้ว' : 'แก้ไขผู้ใช้แล้ว','success');
       } else {
-        showUserAlert('การสร้างผู้ใช้ใหม่:\n1) ไปที่ Supabase → Authentication → Add user สร้าง '+username+'@'+LOGIN_DOMAIN+'\n2) คัดลอก UID มาใส่ในช่องที่จะถามต่อไป');
-        const uid=prompt('วาง User UID จาก Supabase Dashboard:');
-        if(!uid){ return; }
-        const { error }=await sb.from('user_profiles').insert({ id: uid.trim(), username, name, role, status, created_by: currentUser.username });
-        if(error){ showUserAlert('สร้างไม่สำเร็จ: '+error.message+'\n(ตรวจว่า UID ถูกต้องและยังไม่มี profile)'); return; }
+        const password=document.getElementById('uPassword').value;
+        if(!password || password.length < 6){ showUserAlert('กรุณาตั้งรหัสผ่านอย่างน้อย 6 ตัวอักษร'); return; }
+        const email = username + '@' + LOGIN_DOMAIN;
+        const saveBtn=document.getElementById('uSaveBtn'); saveBtn.disabled=true; saveBtn.textContent='กำลังสร้าง...';
+
+        // 1) สร้างบัญชี Auth ผ่าน client แยก (ไม่กระทบ session แอดมิน)
+        const { data:signUpData, error:signUpErr } = await getSignupClient().auth.signUp({ email, password });
+        if(signUpErr){
+          saveBtn.disabled=false; saveBtn.textContent='บันทึก';
+          showUserAlert('สร้างบัญชีไม่สำเร็จ: '+signUpErr.message+'\n(อาจมี username นี้อยู่แล้ว หรือรหัสสั้นเกินไป)');
+          return;
+        }
+        const newId = signUpData && signUpData.user && signUpData.user.id;
+        if(!newId){
+          saveBtn.disabled=false; saveBtn.textContent='บันทึก';
+          showUserAlert('สร้างบัญชีแล้วแต่ไม่ได้รับ UID\nกรุณาปิด "Confirm email" ใน Supabase → Authentication → Providers → Email แล้วลองใหม่');
+          return;
+        }
+
+        // 2) ผูกสิทธิ์ในตาราง user_profiles (ใช้ session แอดมิน)
+        const { error } = await sb.from('user_profiles').insert({ id: newId, username, name, role, status, created_by: currentUser.username });
+        saveBtn.disabled=false; saveBtn.textContent='บันทึก';
+        if(error){
+          showUserAlert('สร้างบัญชี Auth สำเร็จแล้ว แต่ผูกสิทธิ์ไม่สำเร็จ: '+error.message+'\n(UID: '+newId+' — เอาไปผูกเองใน user_profiles ได้)');
+          return;
+        }
         resetUserForm(); await loadUsers(); await loadMachineOptions();
-        showPopup('สร้างผู้ใช้สำเร็จ','ผูกสิทธิ์ให้ '+username+' แล้ว','success');
+        showPopup('สร้างผู้ใช้สำเร็จ','สร้างบัญชี + ตั้งรหัสให้ "'+username+'" แล้ว\nเข้าระบบด้วย username: '+username,'success');
       }
     }
     async function deleteUserProfile(u){
@@ -1560,7 +1657,9 @@
         newValue = await editUseValue('แก้ไข: '+header, oldValue);
         if(newValue===null) return;
       } else if(opts && opts.length){
-        newValue = await pickFromList('แก้ไข: '+header, opts, oldValue);
+        newValue = (key==='machine')
+          ? await pickMultiFromList('แก้ไข: '+header, opts, oldValue)   // เครื่อง = เลือกได้หลายอัน
+          : await pickFromList('แก้ไข: '+header, opts, oldValue);
         if(newValue===null) return;
       } else {
         newValue = prompt('แก้ไข: '+header, oldValue||'');
