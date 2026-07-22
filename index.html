@@ -609,51 +609,67 @@
       });
     }
 
-    // ===== หักเครดิตอัตโนมัติเมื่อเลยวันหมดอายุ =====
-    const EXPIRE_CREDIT_DEDUCT = 389;   // หักคงที่เมื่อเลยวันหมดอายุ (แก้ตัวเลขตรงนี้)
+    // ===== ต่ออายุอัตโนมัติเมื่อถึงวันหมดอายุ =====
+    const EXPIRE_CREDIT_DEDUCT = 389;   // ค่าต่ออายุ/เดือน (แก้ตัวเลขตรงนี้)
     // เครดิตเก็บเป็น text อาจมีลูกน้ำหลักพัน ("1,633") → ตัดลูกน้ำก่อนแปลงเป็นตัวเลข
     function parseCredit(v){ return Number(String(v==null?'':v).replace(/,/g,'').trim()); }
-    // เลยวันหมดอายุ (วันนี้ > วันหมดอายุ) → หัก 389 ครั้งเดียวต่อรอบ
-    // credit_deducted_for เก็บวันหมดอายุ (YYYY-MM-DD) ที่หักไปแล้ว → เติมโค้ดต่ออายุ = วันใหม่ = หักได้อีกรอบ
-    // ต้องเพิ่มคอลัมน์ก่อน: รัน add_credit_deducted_for.sql ใน Supabase
-    // ponytail: รันตอนโหลด/ล็อกอิน ไม่ใช่ cron — เปิดหน้าค้างข้ามเที่ยงคืนต้องรีเฟรชถึงหัก; ต้องเป๊ะย้ายไป pg_cron
+    // +1 เดือน (คุมวันสิ้นเดือน เช่น 31 ม.ค. → 28/29 ก.พ.)
+    function addOneMonth(d){
+      const day=d.getDate();
+      const nd=new Date(d.getFullYear(), d.getMonth()+1, 1);
+      const last=new Date(nd.getFullYear(), nd.getMonth()+1, 0).getDate();
+      nd.setDate(Math.min(day, last));
+      return nd;
+    }
+    // จัดรูปแบบวันที่กลับให้เหมือนสตริงเดิม (พ.ศ. 2 หลัก / พ.ศ. 4 หลัก / ค.ศ. 4 หลัก)
+    function formatDateLike(d, originalStr){
+      const m=String(originalStr).match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+      const yStr=m?m[3]:String(d.getFullYear()); const gy=d.getFullYear();
+      let y;
+      if(yStr.length<=2) y=String((gy+543)%100).padStart(2,'0');   // พ.ศ. 2 หลัก
+      else if(parseInt(yStr,10)>2400) y=String(gy+543);            // พ.ศ. 4 หลัก
+      else y=String(gy);                                           // ค.ศ. 4 หลัก
+      return d.getDate()+'/'+(d.getMonth()+1)+'/'+y;
+    }
+    // ถึงวันหมดอายุ (วันนี้ >= วันหมดอายุ) และเครดิต > 389 → เลื่อนวันไป 1 เดือน + หัก 389
+    // การเลื่อนวันเองเป็นตัวกันหักซ้ำ (วันใหม่เป็นอนาคต จะไม่เข้าเงื่อนไขอีก) + guard expire_date กันหลายเครื่อง
+    // เครดิต <= 389 = ไม่พอต่อ → ปล่อยไว้ (ไม่หัก) รอเติม
+    // ponytail: รันตอนโหลด/ล็อกอิน/กด ↻ ไม่ใช่ cron — เปิดค้างข้ามวันต้องรีเฟรช; ต้องเป๊ะย้ายไป pg_cron
     async function applyExpiredCreditDeductions(){
-      if(!canEdit()) return;   // เฉพาะคนที่แก้ได้ (guard ที่ DB กันหักซ้ำข้ามเครื่องอยู่แล้ว)
+      if(!canEdit()) return;
       const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
-      const targets=[];
-      accountsRows.forEach(row=>{
+      const targets=accountsRows.filter(row=>{
         const d=extractDate(row.expire_date);
-        if(!d || d.getTime()>=today.getTime()) return;                 // ยังไม่เลยวันหมดอายุ
-        const expKey=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-        if(String(row.credit_deducted_for||'')===expKey) return;        // หักรอบนี้ไปแล้ว
-        if(!Number.isFinite(parseCredit(row.credit))) return; // เครดิตไม่ใช่ตัวเลข ข้าม
-        targets.push({row, expKey});
+        if(!d || d.getTime()>today.getTime()) return false;              // ยังไม่ถึงวัน
+        const c=parseCredit(row.credit);
+        return Number.isFinite(c) && c>EXPIRE_CREDIT_DEDUCT;             // เครดิตพอต่อ (>389)
       });
       if(!targets.length) return;
       let done=0, refetched=0;
-      for(const {row, expKey} of targets){
+      for(const row of targets){
         const oldRow={...row};
-        const newCredit=(parseCredit(row.credit)-EXPIRE_CREDIT_DEDUCT).toLocaleString('en-US');  // ใส่ลูกน้ำหลักพันให้เหมือนค่าเดิม
-        // guard: อัปเดตเฉพาะแถวที่ยังไม่ถูกหักรอบนี้ → เครื่องอื่นหักไปแล้วจะได้ 0 แถว ไม่หักซ้ำ
+        const newCredit=(parseCredit(row.credit)-EXPIRE_CREDIT_DEDUCT).toLocaleString('en-US');
+        const nd=addOneMonth(extractDate(row.expire_date));
+        const newExpire=String(row.expire_date).replace(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/, formatDateLike(nd, row.expire_date));
+        // guard: อัปเดตเฉพาะเมื่อ expire_date ยังเป็นค่าเดิม → เครื่องอื่นเลื่อนไปแล้วจะได้ 0 แถว ไม่ต่อซ้ำ
         const { data, error } = await sb.from('accounts')
-          .update({ credit:newCredit, credit_deducted_for:expKey })
-          .eq('id',row.id)
-          .or('credit_deducted_for.is.null,credit_deducted_for.neq.'+expKey)
+          .update({ credit:newCredit, expire_date:newExpire })
+          .eq('id',row.id).eq('expire_date',row.expire_date)
           .select(COLS);
         if(error) continue;
         const i=accountsRows.findIndex(r=>r.id===row.id);
-        if(!data || !data.length){   // 0 แถว = เครื่องอื่นหักแล้ว/อัปเดตไม่ผ่าน → ดึงค่าจริงจาก DB มาแสดง (ห้ามปั๊ม marker เอง ไม่งั้นค้างไม่หักถาวร)
+        if(!data || !data.length){   // 0 แถว = เครื่องอื่นต่อไปแล้ว → ดึงค่าจริงมาแสดง
           const r=await sb.from('accounts').select(COLS).eq('id',row.id).single();
           if(!r.error && r.data && i>=0){ accountsRows[i]=r.data; refetched++; }
           continue;
         }
         markSaved(row.id);
         if(i>=0) accountsRows[i]=data[0];
-        await writeAudit('UPDATE', row.id, oldRow, data[0], 'System');   // หักอัตโนมัติ = แสดงเป็น System
+        await writeAudit('UPDATE', row.id, oldRow, data[0], 'System');   // ต่ออายุอัตโนมัติ = แสดงเป็น System
         done++;
       }
       if(done>0 || refetched>0){ saveCache(getMaxUpdatedAt()); applySearch(); updateSummary(); }
-      if(done>0) setStatus('หักเครดิต '+EXPIRE_CREDIT_DEDUCT+' อัตโนมัติ '+done+' รายการ (เลยวันหมดอายุ)');
+      if(done>0) setStatus('ต่ออายุ + หัก '+EXPIRE_CREDIT_DEDUCT+' อัตโนมัติ '+done+' รายการ');
     }
     let currentMode = 'edit', editingId = null, popupCb = null;
     let syncing = false, lastAutoSync = 0, autoSyncTimer = null;
