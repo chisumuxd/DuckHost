@@ -1658,7 +1658,8 @@
       markSaved(row.id);
       if(typeof writeAudit==='function' && oldRow){
         const newRow = Object.assign({}, oldRow, payload);
-        await writeAudit('UPDATE', row.id, oldRow, newRow);
+        const actor = (key==='expire_date') ? 'System' : undefined;   // แก้วันหมดอายุ = แสดงเป็น System
+        await writeAudit('UPDATE', row.id, oldRow, newRow, actor);
       }
       const idx = accountsRows.findIndex(r=>r.id===row.id);
       if(idx>=0) accountsRows[idx] = Object.assign({}, accountsRows[idx], payload);
