@@ -99,6 +99,7 @@
     #summaryBar .summary-box:nth-child(2)::after{ content:'✅'; }
     #summaryBar .summary-box:nth-child(3)::after{ content:'❌'; }
     #summaryBar .summary-box:nth-child(4)::after{ content:'💌'; }
+    #summaryBar .summary-box:nth-child(5)::after{ content:'⏰'; }
 
     /* ===== SEARCH ROW ===== */
     .search-row{
@@ -258,6 +259,7 @@
     body.dark #summaryBar .summary-box:nth-child(2){ background:#1a2e20 !important; color:#69db7c !important; }
     body.dark #summaryBar .summary-box:nth-child(3){ background:#33201f !important; color:#ff8787 !important; }
     body.dark #summaryBar .summary-box:nth-child(4){ background:#332c17 !important; color:#ffd43b !important; }
+    body.dark #summaryBar .summary-box:nth-child(5){ background:#33281a !important; color:#ffa94d !important; }
 
     body.dark .search-row{ border-top-color:#4a4020; }
     body.dark .search-input{ background:#252b31; border-color:#4a4020; color:#e8eef0; }
@@ -385,6 +387,10 @@
           <div class="summary-box" style="background:#fff3cd; color:#664d03;">
             <div class="summary-num" id="sumEmpty">-</div>
             <div class="summary-label">หัวบ้านว่าง</div>
+          </div>
+          <div class="summary-box" style="background:#ffe8cc; color:#8a4b00;">
+            <div class="summary-num" id="sumUseExpired">-</div>
+            <div class="summary-label">ลูกค้าหมดอายุ (Use)</div>
           </div>
         </div>
 
@@ -633,17 +639,20 @@
 
     function updateSummary(){
       const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
-      let total=accountsRows.length, expired=0, empty=0;
+      let total=accountsRows.length, expired=0, empty=0, useExpired=0;
       accountsRows.forEach(row=>{
         const d=extractDate(row.expire_date);
         if(d && d.getTime()<=today.getTime()) expired++;
         if(rowHasEmptyHB(row)) empty++;
+        // นับช่อง Use 1-5 ที่วันในช่องเลยวันนี้แล้ว (ลูกค้าหมดอายุรายช่อง)
+        USE_KEYS.forEach(k=>{ const du=extractDate(row[k]); if(du && du.getTime()<=today.getTime()) useExpired++; });
       });
       const active = total - expired;
-      document.getElementById('sumTotal').textContent   = total.toLocaleString();
-      document.getElementById('sumActive').textContent  = active.toLocaleString();
-      document.getElementById('sumExpired').textContent = expired.toLocaleString();
-      document.getElementById('sumEmpty').textContent   = empty.toLocaleString();
+      document.getElementById('sumTotal').textContent      = total.toLocaleString();
+      document.getElementById('sumActive').textContent     = active.toLocaleString();
+      document.getElementById('sumExpired').textContent    = expired.toLocaleString();
+      document.getElementById('sumEmpty').textContent      = empty.toLocaleString();
+      document.getElementById('sumUseExpired').textContent = useExpired.toLocaleString();
     }
 
     function showPopup(title, msg, type, cb){
