@@ -1751,11 +1751,17 @@
       copyBtn.onmouseover = ()=> copyBtn.style.background='#eef';
       copyBtn.onmouseout  = ()=> copyBtn.style.background='';
       copyBtn.onclick = async ()=>{
+        // ช่อง Use 1-5 = ก็อปแค่ชื่อ (ตัดร้าน + วันที่ ทั้งแบบมี/ไม่มีวงเล็บ)
+        let text = ctxValue;
+        if(USE_KEYS.includes(ctxField)){
+          const nm = (parseUseValue(ctxValue).name || '').replace(/\s*\(\s*\d{1,2}\/\d{1,2}\/\d{2,4}\s*\)\s*$/,'').trim();
+          text = nm || ctxValue;
+        }
         try {
-          await navigator.clipboard.writeText(ctxValue);
-          setStatus('คัดลอกแล้ว: ' + (ctxValue.length>40 ? ctxValue.slice(0,40)+'...' : ctxValue));
+          await navigator.clipboard.writeText(text);
+          setStatus('คัดลอกแล้ว: ' + (text.length>40 ? text.slice(0,40)+'...' : text));
         } catch(err) {
-          const ta=document.createElement('textarea'); ta.value=ctxValue; document.body.appendChild(ta);
+          const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta);
           ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
           setStatus('คัดลอกแล้ว');
         }
