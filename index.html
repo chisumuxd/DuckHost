@@ -1752,8 +1752,9 @@
       copyBtn.onmouseout  = ()=> copyBtn.style.background='';
       copyBtn.onclick = async ()=>{
         // ช่อง Use 1-5 = ก็อปแค่ชื่อ (ตัดร้าน + วันที่ ทั้งแบบมี/ไม่มีวงเล็บ)
+        const fkey = (ctxField && ctxField.key) ? ctxField.key : ctxField;   // ctxField เป็น object ฟิลด์
         let text = ctxValue;
-        if(USE_KEYS.includes(ctxField)){
+        if(USE_KEYS.includes(fkey)){
           const nm = (parseUseValue(ctxValue).name || '').replace(/\s*\(\s*\d{1,2}\/\d{1,2}\/\d{2,4}\s*\)\s*$/,'').trim();
           text = nm || ctxValue;
         }
