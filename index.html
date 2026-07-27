@@ -1243,8 +1243,8 @@
       vRows = rows; vLastStart = -1; vLastEnd = -1;
 
       const wrap = vGetWrap();
-      // จำตำแหน่งสกรอลล์ไว้ก่อนวาดใหม่ (ค้างหน้าเดิมตอนแก้ไขข้อมูล)
-      const keepScroll = (wrap && !opts.resetScroll) ? wrap.scrollTop : 0;
+      // คงตำแหน่งสกรอลล์เสมอ — ไม่เด้งขึ้นบนไม่ว่าค้นหา/เรียง/ซิงก์/แก้ไข
+      const keepScroll = wrap ? wrap.scrollTop : 0;
 
       const thead=document.getElementById('tableHead'), tbody=document.getElementById('tableBody');
       thead.innerHTML=''; tbody.innerHTML='';
