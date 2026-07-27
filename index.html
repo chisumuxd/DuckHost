@@ -1243,8 +1243,10 @@
       vRows = rows; vLastStart = -1; vLastEnd = -1;
 
       const wrap = vGetWrap();
-      // คงตำแหน่งสกรอลล์เสมอ — ไม่เด้งขึ้นบนไม่ว่าค้นหา/เรียง/ซิงก์/แก้ไข
+      // คงตำแหน่งสกรอลล์เสมอ — ทั้งในตาราง (keepScroll) และหน้าเว็บ (winY)
+      // ตอน tbody ว่างชั่วขณะ ตารางหด → window scroll ถูก clamp เป็น 0 → ต้องคืนด้วย
       const keepScroll = wrap ? wrap.scrollTop : 0;
+      const winY = window.scrollY;
 
       const thead=document.getElementById('tableHead'), tbody=document.getElementById('tableBody');
       thead.innerHTML=''; tbody.innerHTML='';
@@ -1272,7 +1274,7 @@
       tableEl.style.width = totalW + 'px';
       tableEl.style.minWidth = totalW + 'px';
 
-      if(rows.length===0){ setStatus('ไม่พบข้อมูลที่ตรงกับคำค้นหา'); return; }
+      if(rows.length===0){ setStatus('ไม่พบข้อมูลที่ตรงกับคำค้นหา'); window.scrollTo(0,winY); return; }
 
       vCtx = {
         useTarget: (opts.chkUseDate && opts.keyword) ? extractDate(opts.keyword) : null,
@@ -1286,6 +1288,7 @@
         wrap.scrollTop = keepScroll;  // ตอนนี้ tbody สูงเต็มแล้ว คืนตำแหน่งได้จริง
         renderWindow();               // วาดซ้ำให้ตรงตำแหน่ง — synchronous ไม่พึ่ง rAF (แท็บเบื้องหลังก็ถูก)
       }
+      window.scrollTo(0, winY);       // คืน scroll หน้าเว็บ — กัน window เด้งขึ้นบนตอน tbody หดชั่วขณะ
       setStatus('แสดง '+rows.length+' แถว');
     }
 
@@ -1952,6 +1955,7 @@ function renderRoomPage(){
 
   vRows = rooms; vLastStart = -1; vLastEnd = -1;
   const wrap = vGetWrap();
+  const winY = window.scrollY;   // กัน window เด้งขึ้นบนตอน tbody หดชั่วขณะ
   const thead = document.getElementById('tableHead'), tbody = document.getElementById('tableBody');
   thead.innerHTML=''; tbody.innerHTML='';
 
@@ -1972,12 +1976,13 @@ function renderRoomPage(){
   tableEl.style.width = totalW+'px'; tableEl.style.minWidth = totalW+'px';
 
   setStatus('หน้าห้องว่าง: '+rooms.length+' ห้องว่าง (จากหัวบ้านที่ยังไม่หมดอายุ)');
-  if(rooms.length===0) return;
+  if(rooms.length===0){ window.scrollTo(0,winY); return; }
 
   vCtx = { mode:'room', colCount: ROOM_FIELDS.length + 2 };
   bindVScroll();
   renderWindow();
   if(wrap){ wrap.scrollTop = 0; renderWindow(); }
+  window.scrollTo(0, winY);
 }
 
 // popup หลังเบิกห้อง: ข้อความชุดเดียว คัดลอกทีเดียวได้ทั้งก้อน
