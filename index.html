@@ -830,11 +830,11 @@
 
         function submit(){
           const nm=nameInput.value.trim(), dt=dateInput.value.trim();
-          if((selectedStore || nm) && !dt){ err.textContent='⚠️ กรุณาใส่วันที่ (หรือกด "ลบค่า" ถ้าจะเว้นว่าง)'; dateInput.focus(); return; }
+          if((selectedStore || nm) && !dt){ err.textContent='⚠️ กรุณาใส่วันที่ (หรือกด "ลบค่า" ถ้าจะเว้นว่าง)'; dateInput.focus({preventScroll:true}); return; }
           document.body.removeChild(backdrop);
           resolve(joinUseValue(selectedStore, nm, dt));
         }
-        nameInput.onkeydown=(e)=>{ if(e.key==='Enter') dateInput.focus(); };
+        nameInput.onkeydown=(e)=>{ if(e.key==='Enter') dateInput.focus({preventScroll:true}); };
         dateInput.onkeydown=(e)=>{ if(e.key==='Enter') submit(); };
 
         const footer=document.createElement('div'); footer.style.cssText='display:flex;gap:10px;margin-top:6px;';
@@ -852,7 +852,7 @@
         backdrop.appendChild(box);
         backdrop.onclick=(e)=>{ if(e.target===backdrop){ document.body.removeChild(backdrop); resolve(null); } };
         document.body.appendChild(backdrop);
-        setTimeout(()=>nameInput.focus(), 50);
+        setTimeout(()=>nameInput.focus({preventScroll:true}), 50);   // preventScroll = ไม่ให้หน้าเด้งขึ้นบนตอนเปิดโมดัล
       });
     }
 
@@ -1705,8 +1705,12 @@
       if(idx>=0) accountsRows[idx] = Object.assign({}, accountsRows[idx], payload);
       syncVRow(row.id);
       saveCache(getMaxUpdatedAt());
+      // จำตำแหน่งสกรอลล์ (หน้าเว็บ + ตาราง) แล้วคืนหลังวาดใหม่ — กันเด้งขึ้นบนทุกกรณี
+      const _wy=window.scrollY, _wrapEl=document.querySelector('.table-wrap'), _st=_wrapEl?_wrapEl.scrollTop:0;
       // อัปเดตเฉพาะแถวนั้น — ไม่วาดตารางใหม่ = หน้าค้างที่เดิม ไม่เด้ง
       if(!(idx>=0 && refreshRowDom(accountsRows[idx]))) applySearch();
+      if(_wrapEl) _wrapEl.scrollTop=_st;
+      window.scrollTo(0,_wy);
       updateSummary();
       setStatus('แก้ไข '+header+' ของ ID '+row.id+' แล้ว');
     }
