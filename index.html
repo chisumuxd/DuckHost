@@ -1304,6 +1304,14 @@
       return false;   // แถวไม่อยู่ในจอ → ให้ผู้เรียกไปวาดปกติแทน
     }
 
+    // sync object แถวใน vRows (อาเรย์ที่ virtual scroll ใช้วาด) ให้ชี้ object เดียวกับ accountsRows
+    // กันบั๊ก: แก้ข้อมูลตอนมีค้นหา/เรียง แล้วเลื่อนตาราง แถวถูกวาดจาก vRows เก่า = ค่าเด้งกลับ
+    function syncVRow(id){
+      if(!Array.isArray(vRows)) return;
+      const ai = accountsRows.findIndex(r=>r.id===id); if(ai<0) return;
+      const vj = vRows.findIndex(r=>r && r.id===id); if(vj>=0) vRows[vj] = accountsRows[ai];
+    }
+
     // event delegation — แปะ handler ครั้งเดียวที่ tbody (แทนที่จะแปะทุกช่อง)
     function initTableHandlers(){
       const tbody=document.getElementById('tableBody');
@@ -1435,6 +1443,7 @@
           await writeAudit('UPDATE', editingId, oldRow, res.data);
           const i=accountsRows.findIndex(r=>r.id===editingId);
           if(i>=0) accountsRows[i]=res.data;
+          syncVRow(editingId);
           saveCache(getMaxUpdatedAt());
         }
       }
@@ -1694,6 +1703,7 @@
       }
       const idx = accountsRows.findIndex(r=>r.id===row.id);
       if(idx>=0) accountsRows[idx] = Object.assign({}, accountsRows[idx], payload);
+      syncVRow(row.id);
       saveCache(getMaxUpdatedAt());
       // อัปเดตเฉพาะแถวนั้น — ไม่วาดตารางใหม่ = หน้าค้างที่เดิม ไม่เด้ง
       if(!(idx>=0 && refreshRowDom(accountsRows[idx]))) applySearch();
