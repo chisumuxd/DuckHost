@@ -145,6 +145,9 @@
     }
     tbody tr{ border-bottom:1px solid #eef3ef; }
     tbody tr:hover{ background:#f3fbf5 !important; }
+    tbody tr.row-selected td{ border-top:2px solid #f59f00; border-bottom:2px solid #f59f00; }
+    tbody tr.row-selected td:first-child{ border-left:2px solid #f59f00; }
+    tbody tr.row-selected td:last-child{ border-right:2px solid #f59f00; }
     td{
       padding:0 10px; height:42px; max-height:42px;
       font-size:12px; color:#2b3a2e; vertical-align:middle;
@@ -1150,11 +1153,18 @@
       window.addEventListener('resize', ()=>{ if(vRows.length) renderWindow(); });
     }
 
+    let selectedRowId = null;   // แถวที่เลือก (ขึ้นกรอบ)
+    function updateRowSelection(){
+      document.querySelectorAll('#tableBody tr').forEach(tr=>{
+        if(tr._row) tr.classList.toggle('row-selected', tr._row.id===selectedRowId);
+      });
+    }
     function buildVRow(row, idx){
       if(vCtx && vCtx.mode==='room') return buildRoomRow(row, idx);
       const { useTarget, editable } = vCtx;
       const tr=document.createElement('tr');
       tr._row = row;
+      if(selectedRowId!=null && row.id===selectedRowId) tr.classList.add('row-selected');
 
       const tdNo=document.createElement('td');
       tdNo.textContent = idx+1;
@@ -1307,8 +1317,10 @@
         showCtxMenu(e, r.row[r.key]||'', r.row, r.f);
       });
       tbody.addEventListener('click', e=>{
-        const btn=e.target.closest('button[data-edit]'); if(!btn) return;
-        const tr=btn.closest('tr'); if(tr&&tr._row) openEditModal(tr._row);
+        const btn=e.target.closest('button[data-edit]');
+        if(btn){ const tr=btn.closest('tr'); if(tr&&tr._row) openEditModal(tr._row); return; }
+        const tr=e.target.closest('tr');
+        if(tr && tr._row){ selectedRowId=(selectedRowId===tr._row.id)?null:tr._row.id; updateRowSelection(); }
       });
     }
 
