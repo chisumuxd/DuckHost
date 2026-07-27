@@ -1153,6 +1153,15 @@
       window.addEventListener('resize', ()=>{ if(vRows.length) renderWindow(); });
     }
 
+    // โชว์ปีเป็น พ.ศ. 2 หลัก (2026→69) — แปลงเฉพาะตอนแสดงผล ไม่แตะค่าใน DB
+    function displayDateBE(value){
+      return String(value||'').replace(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/, (mm, d, mo, y)=>{
+        let year=parseInt(y,10);
+        if(year<100) return d+'/'+mo+'/'+String(year).padStart(2,'0');   // พ.ศ. 2 หลักอยู่แล้ว
+        if(year<2400) year+=543;                                          // ค.ศ. → พ.ศ.
+        return d+'/'+mo+'/'+String(year%100).padStart(2,'0');             // พ.ศ. 4 หลัก → 2 หลัก
+      });
+    }
     let selectedRowId = null;   // แถวที่เลือก (ขึ้นกรอบ)
     function updateRowSelection(){
       document.querySelectorAll('#tableBody tr').forEach(tr=>{
@@ -1178,6 +1187,7 @@
         if(useTarget&&USE_KEYS.includes(f.key)){ const d=extractDate(value); if(!d||d.getTime()!==useTarget.getTime()) value=''; }
         if(f.key==='status'){ value = effectiveStatus(row); }
         if(USE_KEYS.includes(f.key) && value){ td.innerHTML = useCellHtml(value); }
+        else if(f.key==='expire_date' || f.key==='fill_date'){ td.textContent = displayDateBE(value); }
         else { td.textContent=value; }
         if(USE_KEYS.includes(f.key)) td.classList.add('use-cell');
         else if(f.key==='machine') td.classList.add('machine-cell');
