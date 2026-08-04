@@ -157,6 +157,8 @@
     td.machine-cell{ white-space:nowrap !important; overflow:hidden; text-overflow:ellipsis; }
     td.editable{ cursor:pointer; }
     td.editable:hover{ box-shadow:inset 0 0 0 2px rgba(252,196,25,0.5); }
+    td.use-cell[draggable=true]{ cursor:grab; }
+    td.use-cell.drop-hint{ box-shadow:inset 0 0 0 3px #339af0 !important; }
     td.actions{ white-space:nowrap; text-align:center; }
     td.actions .btn-yellow{ padding:5px 16px; font-size:13px; box-shadow:0 3px 0 #e8a800; }
     td.actions .btn-yellow:active{ box-shadow:0 1px 0 #e8a800; }
@@ -824,6 +826,22 @@
         dateInput.style.cssText='width:100%;padding:11px 12px;border:1px solid #ccc;border-radius:10px;font-size:15px;margin-bottom:6px;';
         box.appendChild(dateInput);
 
+        // ปุ่มเติมวันอัตโนมัติ (วันนี้ + ระยะ) → ใส่ในช่องวันที่ เป็น พ.ศ. 2 หลัก
+        const durLabel=document.createElement('div'); durLabel.textContent='เติมวันเร็ว (จากวันนี้):';
+        durLabel.style.cssText='font-size:12px;font-weight:700;color:#777;margin:2px 0 5px;'; box.appendChild(durLabel);
+        const durRow=document.createElement('div'); durRow.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;';
+        function addMonthsDur(d,n){ const day=d.getDate(); const nd=new Date(d.getFullYear(),d.getMonth()+n,1); const last=new Date(nd.getFullYear(),nd.getMonth()+1,0).getDate(); nd.setDate(Math.min(day,last)); return nd; }
+        function fmtBE2(d){ return d.getDate()+'/'+(d.getMonth()+1)+'/'+String((d.getFullYear()+543)%100).padStart(2,'0'); }
+        [{t:'7 วัน',days:7},{t:'14 วัน',days:14},{t:'1 เดือน',mo:1},{t:'2 เดือน',mo:2},{t:'3 เดือน',mo:3},{t:'6 เดือน',mo:6},{t:'12 เดือน',mo:12}].forEach(o=>{
+          const b=document.createElement('button'); b.textContent=o.t;
+          b.style.cssText='border:1px solid #40c057;background:#eefaf2;color:#0f5132;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;cursor:pointer;';
+          b.onclick=()=>{ const now=new Date(); const base=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+            const d = o.days ? new Date(base.getTime()+o.days*86400000) : addMonthsDur(base,o.mo);
+            dateInput.value=fmtBE2(d); dateInput.focus({preventScroll:true}); };
+          durRow.appendChild(b);
+        });
+        box.appendChild(durRow);
+
         const err=document.createElement('div');
         err.style.cssText='font-size:12px;color:#d93025;font-weight:700;min-height:16px;margin-bottom:6px;';
         box.appendChild(err);
@@ -1189,7 +1207,11 @@
         if(USE_KEYS.includes(f.key) && value){ td.innerHTML = useCellHtml(value); }
         else if(f.key==='expire_date' || f.key==='fill_date'){ td.textContent = displayDateBE(value); }
         else { td.textContent=value; }
-        if(USE_KEYS.includes(f.key)) td.classList.add('use-cell');
+        if(USE_KEYS.includes(f.key)){
+          td.classList.add('use-cell');
+          // ลากย้าย/สลับช่อง Use ได้ — เฉพาะช่องที่มีลูกค้าอยู่จริง
+          if(editable && String(value).trim() && String(value).trim()!=='ว่าง') td.draggable=true;
+        }
         else if(f.key==='machine') td.classList.add('machine-cell');
         if(editable) td.classList.add('editable');
         if(f.dateUser){ const c=dateColor(value,true); if(c){ td.style.backgroundColor=c; td.classList.add('cellcolor'); } }
@@ -1343,6 +1365,91 @@
         const tr=e.target.closest('tr');
         if(tr && tr._row){ selectedRowId=(selectedRowId===tr._row.id)?null:tr._row.id; updateRowSelection(); }
       });
+
+      // ===== ลากย้ายช่อง Use 1-5 (ลากไปวางช่อง Use อื่น = สลับค่ากัน ไม่มีข้อมูลหาย) =====
+      let dragSrc=null, dragHintTd=null;
+      const clearHint=()=>{ if(dragHintTd){ dragHintTd.classList.remove('drop-hint'); dragHintTd=null; } };
+      tbody.addEventListener('dragstart', e=>{
+        const r=resolve(e.target);
+        if(!r || !USE_KEYS.includes(r.key) || !canEdit()){ e.preventDefault(); return; }
+        dragSrc={ id:r.row.id, key:r.key };
+        e.dataTransfer.effectAllowed='move';
+        e.dataTransfer.setData('text/plain', r.row[r.key]||'');   // จำเป็นสำหรับ Firefox
+      });
+      tbody.addEventListener('dragover', e=>{
+        if(!dragSrc) return;
+        const td=e.target.closest('td');
+        if(!td || !USE_KEYS.includes(td.dataset.fkey||'')) { clearHint(); return; }
+        e.preventDefault();
+        e.dataTransfer.dropEffect='move';
+        if(dragHintTd!==td){ clearHint(); dragHintTd=td; td.classList.add('drop-hint'); }
+      });
+      tbody.addEventListener('drop', e=>{
+        e.preventDefault(); clearHint();
+        const src=dragSrc; dragSrc=null;
+        if(!src) return;
+        const r=resolve(e.target);
+        if(!r || !USE_KEYS.includes(r.key)) return;
+        swapUseCells(src, { id:r.row.id, key:r.key });
+      });
+      tbody.addEventListener('dragend', ()=>{ dragSrc=null; clearHint(); });
+    }
+
+    // สลับค่าช่อง Use ระหว่างต้นทาง-ปลายทาง (แถวเดียวกันหรือคนละแถวก็ได้)
+    // ปลายทางว่าง = ย้ายเฉยๆ, ปลายทางมีคน = สลับกัน (ไม่ทับข้อมูลใครหาย)
+    async function swapUseCells(src, tgt){
+      if(!canEdit()) return;
+      if(src.id===tgt.id && src.key===tgt.key) return;
+      const srcRow=accountsRows.find(r=>r.id===src.id);
+      const tgtRow=accountsRows.find(r=>r.id===tgt.id);
+      if(!srcRow||!tgtRow) return;
+      const sv=String(srcRow[src.key]||'').trim();
+      const tv=String(tgtRow[tgt.key]||'').trim();
+      if(!sv || sv==='ว่าง') return;
+      const label=k=>'Use '+(USE_KEYS.indexOf(k)+1);
+      const who=r=>r.email||('ID '+r.id);
+      let msg='ย้าย "'+sv+'"\nจาก '+label(src.key)+' ('+who(srcRow)+')\nไป '+label(tgt.key)+' ('+who(tgtRow)+')';
+      if(tv && tv!=='ว่าง') msg+='\n\nช่องปลายทางมี "'+tv+'"\n→ จะสลับกลับมาไว้ที่ '+label(src.key)+' แทน';
+      if(!confirm(msg)) return;
+
+      if(src.id===tgt.id){
+        // แถวเดียวกัน — อัปเดตครั้งเดียวสองช่อง
+        const payload={}; payload[src.key]=tv; payload[tgt.key]=sv;
+        const { error }=await sb.from('accounts').update(payload).eq('id', src.id);
+        if(error){ showPopup('ย้ายไม่สำเร็จ', error.message, 'error'); return; }
+        markSaved(src.id);
+        const newRow=Object.assign({}, srcRow, payload);
+        await writeAudit('UPDATE', src.id, srcRow, newRow);
+        const i=accountsRows.findIndex(r=>r.id===src.id);
+        if(i>=0) accountsRows[i]=newRow;
+        syncVRow(src.id);
+        if(!refreshRowDom(newRow)) applySearch();
+      } else {
+        // คนละแถว — อัปเดตทีละแถว (ถ้าแถวสองพลาด แถวแรกไปแล้ว → โหลดสภาพจริงด้วย applySearch)
+        const r1=await sb.from('accounts').update({ [tgt.key]: sv }).eq('id', tgt.id);
+        if(r1.error){ showPopup('ย้ายไม่สำเร็จ', r1.error.message, 'error'); return; }
+        const r2=await sb.from('accounts').update({ [src.key]: tv }).eq('id', src.id);
+        if(r2.error){ showPopup('ย้ายไม่ครบ', 'วางปลายทางแล้ว แต่ล้างช่องต้นทางไม่สำเร็จ:\n'+r2.error.message+'\n\nกรุณาแก้ช่องต้นทางเอง', 'error'); }
+        markSaved(tgt.id); markSaved(src.id);
+        const newTgt=Object.assign({}, tgtRow, { [tgt.key]: sv });
+        await writeAudit('UPDATE', tgt.id, tgtRow, newTgt);
+        const ti=accountsRows.findIndex(r=>r.id===tgt.id);
+        if(ti>=0) accountsRows[ti]=newTgt;
+        syncVRow(tgt.id);
+        if(!r2.error){
+          const newSrc=Object.assign({}, srcRow, { [src.key]: tv });
+          await writeAudit('UPDATE', src.id, srcRow, newSrc);
+          const si=accountsRows.findIndex(r=>r.id===src.id);
+          if(si>=0) accountsRows[si]=newSrc;
+          syncVRow(src.id);
+        }
+        const okT=refreshRowDom(accountsRows.find(r=>r.id===tgt.id));
+        const okS=refreshRowDom(accountsRows.find(r=>r.id===src.id));
+        if(!okT || !okS) applySearch();
+      }
+      saveCache(getMaxUpdatedAt());
+      updateSummary();
+      setStatus('ย้าย "'+sv+'" ไป '+label(tgt.key)+' ('+who(tgtRow)+') แล้ว');
     }
 
     function dateColor(value,checkWaiting){
@@ -1989,7 +2096,9 @@ function renderRoomPage(){
 function showClaimResult(row, newValue){
   const head = row.email || ('ID '+row.id);
   const p = parseUseValue(newValue);
-  const tenant = [p.name, p.date].filter(Boolean).join(' ');   // ชื่อลูกค้า + วันที่
+  let tname = p.name;
+  if(tname && !tname.includes('@')) tname += '@gmail.com';      // ลูกบ้านเติม @gmail.com ให้เป็นอีเมล
+  const tenant = [tname, p.date].filter(Boolean).join(' ');     // อีเมลลูกค้า + วันที่
 
   // ข้อความชุดเดียว (นี่คือค่าที่จะถูกคัดลอก)
   const combined = 'หัวบ้าน\n'+head+'\n\nลูกบ้าน\n'+tenant;
