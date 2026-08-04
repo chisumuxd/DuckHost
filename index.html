@@ -827,7 +827,7 @@
         box.appendChild(dateInput);
 
         // ปุ่มเติมวันอัตโนมัติ (วันนี้ + ระยะ) → ใส่ในช่องวันที่ เป็น พ.ศ. 2 หลัก
-        const durLabel=document.createElement('div'); durLabel.textContent='เติมวันเร็ว (จากวันนี้):';
+        const durLabel=document.createElement('div'); durLabel.textContent='ใส่วันที่ เฉพาะเพิ่มข้อมูล:';
         durLabel.style.cssText='font-size:12px;font-weight:700;color:#777;margin:2px 0 5px;'; box.appendChild(durLabel);
         const durRow=document.createElement('div'); durRow.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;';
         function addMonthsDur(d,n){ const day=d.getDate(); const nd=new Date(d.getFullYear(),d.getMonth()+n,1); const last=new Date(nd.getFullYear(),nd.getMonth()+1,0).getDate(); nd.setDate(Math.min(day,last)); return nd; }
