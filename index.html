@@ -115,12 +115,12 @@
     }
     .search-input:focus{ border-color:#fcc419; }
     .filter-group{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .filter-group input[type=date]{
+    .filter-group input[type=date], .filter-group select{
       padding:9px 12px; border-radius:18px;
       border:2px solid #ffe066; background:#fffdf5;
       font-family:'Sarabun',sans-serif; font-size:14px; color:#3a2c00; outline:none;
     }
-    .filter-group input[type=date]:focus{ border-color:#fcc419; }
+    .filter-group input[type=date]:focus, .filter-group select:focus{ border-color:#fcc419; }
     .chk-label{
       font-size:14px; color:#2f6b3a; font-weight:700;
       display:flex; align-items:center; gap:6px; cursor:pointer;
@@ -268,7 +268,7 @@
 
     body.dark .search-row{ border-top-color:#4a4020; }
     body.dark .search-input{ background:#252b31; border-color:#4a4020; color:#e8eef0; }
-    body.dark .filter-group input[type=date]{ background:#252b31; border-color:#4a4020; color:#e8eef0; }
+    body.dark .filter-group input[type=date], body.dark .filter-group select{ background:#252b31; border-color:#4a4020; color:#e8eef0; }
     body.dark .chk-label{ background:#1e2a22; border-color:#2f5138; color:#8ce99a; }
     body.dark .status-msg{ color:#9aa5ad; }
 
@@ -407,6 +407,7 @@
           <input id="searchInput" class="search-input" type="text" placeholder="ค้นหาทั่วไป เช่น อีเมล, เครื่อง, เบอร์" oninput="applySearch()" onkeydown="if(event.key==='Enter')applySearch()">
           <div class="filter-group">
             <button id="roomPageBtn" class="btn-primary" onclick="toggleRoomPage()">🏠 เบิกห้องว่าง</button>
+            <select id="roomMachineSel" style="display:none;" onchange="applySearch()" title="กรองห้องว่างตามเครื่อง"></select>
             <label class="chk-label"><input id="chkUseDate" type="checkbox" onchange="applySearch()">ค้นจากวันที่ (Use 1-5)</label>
             <label class="chk-label"><input id="chkMachine" type="checkbox" onchange="applySearch()">ค้นจากเครื่อง</label>
             <button class="btn-gray" onclick="clearSearch()">ล้างผลค้นหา</button>
@@ -827,7 +828,7 @@
         box.appendChild(dateInput);
 
         // ปุ่มเติมวันอัตโนมัติ (วันนี้ + ระยะ) → ใส่ในช่องวันที่ เป็น พ.ศ. 2 หลัก
-        const durLabel=document.createElement('div'); durLabel.textContent='ใส่วันที่ เฉพาะเพิ่มข้อมูล:';
+        const durLabel=document.createElement('div'); durLabel.textContent='เติมวันเร็ว (จากวันนี้):';
         durLabel.style.cssText='font-size:12px;font-weight:700;color:#777;margin:2px 0 5px;'; box.appendChild(durLabel);
         const durRow=document.createElement('div'); durRow.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;';
         function addMonthsDur(d,n){ const day=d.getDate(); const nd=new Date(d.getFullYear(),d.getMonth()+n,1); const last=new Date(nd.getFullYear(),nd.getMonth()+1,0).getDate(); nd.setDate(Math.min(day,last)); return nd; }
@@ -2029,6 +2030,7 @@ function toggleRoomPage(){
   isRoomPage = !isRoomPage;
   const btn = document.getElementById('roomPageBtn');
   const title = document.getElementById('pageTitle');
+  const mSel=document.getElementById('roomMachineSel');
   if(isRoomPage){
     // ปิดหน้า "หมดอายุ" ถ้าเปิดค้างอยู่ กันชนกัน
     if(typeof isExpiredPage!=='undefined' && isExpiredPage){
@@ -2037,14 +2039,23 @@ function toggleRoomPage(){
     }
     btn.textContent='◂ กลับหน้าหัวบ้าน'; btn.className='btn-gray';
     title.textContent='ห้องว่าง';
+    // เติมตัวเลือกเครื่อง (จากรายชื่อเดียวกับช่อง "เครื่อง")
+    if(mSel){
+      const cur=mSel.value;
+      mSel.innerHTML='<option value="">ทุกเครื่อง</option>'+machineOptions.map(m=>'<option>'+escapeHtml(m)+'</option>').join('');
+      mSel.value=cur; if(mSel.value!==cur) mSel.value='';
+      mSel.style.display='';
+    }
     renderRoomPage();
   } else {
     btn.textContent='🏠 หน้าห้องว่าง'; btn.className='btn-primary';
     title.textContent='หัวบ้าน Duck Duck Premium';
+    if(mSel) mSel.style.display='none';
     applySearch();
   }
 }
 
+let lastRoomFilterSig = null;   // ลายเซ็นตัวกรองหน้าห้องว่าง — เปลี่ยนตัวกรอง = เด้งขึ้นบน, อย่างอื่น (ซิงก์/realtime) = คงตำแหน่ง
 function renderRoomPage(){
   let rooms = collectEmptyRooms();
 
@@ -2057,11 +2068,20 @@ function renderRoomPage(){
       return ws.every(w=>hay.includes(w));
     });
   }
+  // กรองตามเครื่องที่เลือก (เทียบเป็นชื่อเต็ม — ช่อง "เครื่อง" เก็บหลายชื่อคั่นด้วย , )
+  const mSel=document.getElementById('roomMachineSel');
+  const mv = mSel ? mSel.value : '';
+  if(mv) rooms = rooms.filter(it=>String(it.row.machine||'').split(',').map(s=>s.trim()).includes(mv));
   // เรียงตาม id หัวบ้าน → ช่อง
   rooms.sort((a,b)=> (a.row.id-b.row.id) || (USE_KEYS.indexOf(a.key)-USE_KEYS.indexOf(b.key)));
 
+  const filterSig = JSON.stringify([kw, mv]);
+  const resetScroll = (filterSig !== lastRoomFilterSig);
+  lastRoomFilterSig = filterSig;
+
   vRows = rooms; vLastStart = -1; vLastEnd = -1;
   const wrap = vGetWrap();
+  const keepScroll = wrap ? wrap.scrollTop : 0;   // จำตำแหน่งสกรอลล์ตาราง ไว้คืนหลังวาดใหม่
   const winY = window.scrollY;   // กัน window เด้งขึ้นบนตอน tbody หดชั่วขณะ
   const thead = document.getElementById('tableHead'), tbody = document.getElementById('tableBody');
   thead.innerHTML=''; tbody.innerHTML='';
@@ -2088,7 +2108,8 @@ function renderRoomPage(){
   vCtx = { mode:'room', colCount: ROOM_FIELDS.length + 2 };
   bindVScroll();
   renderWindow();
-  if(wrap){ wrap.scrollTop = 0; renderWindow(); }
+  // เปลี่ยนตัวกรอง = เริ่มที่บนสุด, วาดซ้ำจากซิงก์/realtime = คงตำแหน่งเดิม ไม่เด้ง
+  if(wrap){ wrap.scrollTop = resetScroll ? 0 : keepScroll; renderWindow(); }
   window.scrollTo(0, winY);
 }
 
