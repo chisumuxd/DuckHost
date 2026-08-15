@@ -325,6 +325,7 @@
           </div>
           <div class="topbar-actions">
             <button class="btn-yellow" onclick="openGiftCard()">🎁 เบิก gift card</button>
+            <button class="btn-gray" onclick="openRetryModal()" style="position:relative;">⏳ รอตัดชำระ<span id="retryBadge" style="display:none;position:absolute;top:-7px;right:-7px;background:#fa5252;color:#fff;border-radius:10px;min-width:20px;height:20px;padding:0 5px;font-size:12px;font-weight:800;line-height:20px;text-align:center;">0</span></button>
             <button id="manageUsersBtn" class="btn-gray" style="display:none;" onclick="openUserModal()">จัดการผู้ใช้</button>
             <button id="auditBtn" class="btn-gray" style="display:none;" onclick="openAuditModal()">ประวัติ</button>
             <button id="addBtn" class="btn-blue" onclick="openAddModal()">+ เพิ่มข้อมูล</button>
@@ -493,6 +494,35 @@
         <table style="min-width:900px;">
           <thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>การกระทำ</th><th>Email</th><th>คอลัมน์</th><th>ค่าเดิม</th><th>ค่าใหม่</th></tr></thead>
           <tbody id="auditTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="retryModalBackdrop" class="modal-backdrop">
+    <div class="modal" style="width:min(96vw,900px); max-width:none;">
+      <div class="modal-header">
+        <div class="modal-title">⏳ เคสรอตัดชำระใหม่</div>
+        <button class="btn-red" onclick="closeRetryModal()">ปิด</button>
+      </div>
+      <div id="retryModalAlert" class="modal-alert"></div>
+      <div class="form-grid" style="grid-template-columns:2fr 2fr 1fr auto; align-items:end;">
+        <div class="form-group"><label>อีเมล/ชื่อลูกค้า</label><input id="rcEmail" type="text" placeholder="เช่น customer@gmail.com" onkeydown="if(event.key==='Enter')saveRetryCase()"></div>
+        <div class="form-group"><label>หมายเหตุ</label><input id="rcNote" type="text" placeholder="เช่น บัตรตัดไม่ผ่าน" onkeydown="if(event.key==='Enter')saveRetryCase()"></div>
+        <div class="form-group"><label>นัดตัดอีกครั้ง</label><input id="rcDate" type="date"></div>
+        <div class="form-group"><button id="rcSaveBtn" class="btn-primary" onclick="saveRetryCase()">เพิ่มเคส</button></div>
+      </div>
+      <div style="font-size:12px;color:#888;margin-top:6px;">ค่าเริ่มต้น = วันนี้ + 3 วัน • ถึงกำหนด/เลยกำหนด = ช่องวันที่ขึ้นสีแดง</div>
+      <div class="table-wrap" style="margin-top:12px; max-height:50vh;">
+        <table style="width:100%; table-layout:fixed;">
+          <thead><tr>
+            <th style="width:26%;">อีเมล/ชื่อลูกค้า</th>
+            <th style="width:26%;">หมายเหตุ</th>
+            <th style="width:13%;">นัดตัด</th>
+            <th style="width:13%;">ผู้เพิ่ม</th>
+            <th style="width:22%;">จัดการ</th>
+          </tr></thead>
+          <tbody id="retryTableBody"></tbody>
         </table>
       </div>
     </div>
@@ -899,7 +929,7 @@
       document.getElementById('manageUsersBtn').style.display = (currentUser.role==='ADMIN') ? 'inline-block' : 'none';
       document.getElementById('auditBtn').style.display = (currentUser.role==='ADMIN') ? 'inline-block' : 'none';
       await loadMachineOptions();
-      showApp(); initTableHandlers(); await loadAccounts(); startRealtime(); startAutoSync();
+      showApp(); initTableHandlers(); loadRetryCases(); await loadAccounts(); startRealtime(); startAutoSync();
     }
     // ===== DARK MODE toggle =====
     function applyDark(on){
@@ -1757,6 +1787,102 @@
         });
         tbody.appendChild(tr);
       });
+    }
+
+    /* ===== เคสรอตัดชำระใหม่ (ตาราง retry_cases) =====
+       ครั้งแรกต้องรัน SQL นี้ใน Supabase → SQL Editor:
+
+       create table if not exists retry_cases (
+         id bigint generated always as identity primary key,
+         email text not null,
+         note text default '',
+         due_date date not null,
+         created_by text default '',
+         created_at timestamptz default now()
+       );
+       alter table retry_cases enable row level security;
+       create policy "auth all retry" on retry_cases
+         for all to authenticated using (true) with check (true);
+    */
+    let retryRows = [];
+    function retryDefaultDate(){ const d=new Date(); d.setDate(d.getDate()+3);
+      return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+    // due_date เก็บเป็น YYYY-MM-DD → โชว์เป็น ว/ด/พ.ศ. 2 หลัก เหมือนช่องวันที่อื่นๆ
+    function retryDueBE(iso){ if(!iso) return ''; const p=String(iso).split('-');
+      return (+p[2])+'/'+(+p[1])+'/'+String((+p[0]+543)%100).padStart(2,'0'); }
+    function retryIsDue(iso){ if(!iso) return false; const p=String(iso).split('-');
+      const d=new Date(+p[0],+p[1]-1,+p[2]); const n=new Date();
+      return d.getTime() <= new Date(n.getFullYear(),n.getMonth(),n.getDate()).getTime(); }
+    function updateRetryBadge(){
+      const n=retryRows.filter(r=>retryIsDue(r.due_date)).length;
+      const b=document.getElementById('retryBadge');
+      if(b){ b.textContent=n; b.style.display = n>0 ? 'inline-block' : 'none'; }
+    }
+    function showRetryAlert(m){ const el=document.getElementById('retryModalAlert'); el.textContent=m; el.className='modal-alert show'; }
+    function hideRetryAlert(){ const el=document.getElementById('retryModalAlert'); el.textContent=''; el.className='modal-alert'; }
+    function openRetryModal(){
+      hideRetryAlert();
+      document.getElementById('rcDate').value = retryDefaultDate();
+      document.getElementById('retryModalBackdrop').style.display='block';
+      loadRetryCases();
+    }
+    function closeRetryModal(){ document.getElementById('retryModalBackdrop').style.display='none'; }
+    async function loadRetryCases(){
+      const { data, error } = await sb.from('retry_cases').select('*')
+        .order('due_date',{ascending:true}).order('id',{ascending:true});
+      if(error){ showRetryAlert('โหลดไม่สำเร็จ: '+error.message+'\n(ถ้าเพิ่งใช้ครั้งแรก ให้รัน SQL สร้างตาราง retry_cases ก่อน — ดูคอมเมนต์เหนือฟังก์ชันนี้ในโค้ด)'); return; }
+      retryRows=data||[]; renderRetryTable(); updateRetryBadge();
+    }
+    function renderRetryTable(){
+      const tbody=document.getElementById('retryTableBody'); tbody.innerHTML='';
+      if(retryRows.length===0){
+        const tr=document.createElement('tr'); const td=document.createElement('td');
+        td.colSpan=5; td.textContent='ไม่มีเคสค้าง 🎉'; tr.appendChild(td); tbody.appendChild(tr); return;
+      }
+      retryRows.forEach(r=>{
+        const tr=document.createElement('tr');
+        [r.email, r.note, retryDueBE(r.due_date), userNameMap[r.created_by]||r.created_by||''].forEach((v,i)=>{
+          const td=document.createElement('td'); td.textContent=v||'';
+          if(i===2 && retryIsDue(r.due_date)){ td.style.backgroundColor='#ff0000'; td.classList.add('cellcolor'); }
+          tr.appendChild(td);
+        });
+        const tdAct=document.createElement('td'); tdAct.className='actions';
+        if(canEdit()){
+          const pb=document.createElement('button'); pb.className='btn-yellow'; pb.textContent='+3 วัน'; pb.title='เลื่อนนัดออกไปอีก 3 วัน'; pb.onclick=()=>postponeRetryCase(r);
+          const db=document.createElement('button'); db.className='btn-primary'; db.textContent='เสร็จสิ้น'; db.style.marginLeft='4px'; db.onclick=()=>finishRetryCase(r);
+          tdAct.appendChild(pb); tdAct.appendChild(db);
+        } else tdAct.textContent='ดูเท่านั้น';
+        tr.appendChild(tdAct); tbody.appendChild(tr);
+      });
+    }
+    async function saveRetryCase(){
+      hideRetryAlert();
+      if(!canEdit()){ showRetryAlert('บัญชีนี้ดูข้อมูลเท่านั้น'); return; }
+      const email=document.getElementById('rcEmail').value.trim();
+      const note=document.getElementById('rcNote').value.trim();
+      const due=document.getElementById('rcDate').value;
+      if(!email){ showRetryAlert('กรุณาใส่อีเมล/ชื่อลูกค้า'); return; }
+      if(!due){ showRetryAlert('กรุณาเลือกวันนัดตัด'); return; }
+      const btn=document.getElementById('rcSaveBtn'); btn.disabled=true;
+      const { error }=await sb.from('retry_cases').insert({ email, note, due_date:due, created_by:currentUser.username });
+      btn.disabled=false;
+      if(error){ showRetryAlert('บันทึกไม่สำเร็จ: '+error.message); return; }
+      document.getElementById('rcEmail').value=''; document.getElementById('rcNote').value='';
+      document.getElementById('rcDate').value=retryDefaultDate();
+      await loadRetryCases();
+    }
+    async function postponeRetryCase(r){
+      const p=String(r.due_date).split('-'); const d=new Date(+p[0],+p[1]-1,+p[2]); d.setDate(d.getDate()+3);
+      const nd=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      const { error }=await sb.from('retry_cases').update({ due_date:nd }).eq('id',r.id);
+      if(error){ showRetryAlert('เลื่อนไม่สำเร็จ: '+error.message); return; }
+      await loadRetryCases();
+    }
+    async function finishRetryCase(r){
+      if(!confirm('เคส "'+r.email+'" ตัดชำระเรียบร้อยแล้ว?\n(รายการจะถูกลบออกจากหน้ารอตัด)')) return;
+      const { error }=await sb.from('retry_cases').delete().eq('id',r.id);
+      if(error){ showRetryAlert('ลบไม่สำเร็จ: '+error.message); return; }
+      await loadRetryCases();
     }
 
     async function quickEditCell(row, key, header, oldValue){
