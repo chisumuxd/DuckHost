@@ -1397,7 +1397,7 @@
         if(tr && tr._row){ selectedRowId=(selectedRowId===tr._row.id)?null:tr._row.id; updateRowSelection(); }
       });
 
-      // ===== ลากย้ายช่อง Use 1-5 (ลากไปวางช่อง Use อื่น = สลับค่ากัน ไม่มีข้อมูลหาย) =====
+      // ===== ลากย้ายช่อง Use 1-5 ซ้าย-ขวาในแถวเดียวกัน (ข้ามแถวไม่ได้ = สลับค่ากัน ไม่มีข้อมูลหาย) =====
       let dragSrc=null, dragHintTd=null;
       const clearHint=()=>{ if(dragHintTd){ dragHintTd.classList.remove('drop-hint'); dragHintTd=null; } };
       tbody.addEventListener('dragstart', e=>{
@@ -1423,66 +1423,38 @@
         if(!src) return;
         const r=resolve(e.target);
         if(!r || !USE_KEYS.includes(r.key) || r.row.id!==src.id) return;
-        swapUseCells(src, { id:r.row.id, key:r.key });
+        swapUseCells(src.id, src.key, r.key);
       });
       tbody.addEventListener('dragend', ()=>{ dragSrc=null; clearHint(); });
     }
 
-    // สลับค่าช่อง Use ระหว่างต้นทาง-ปลายทาง (แถวเดียวกันหรือคนละแถวก็ได้)
+    // สลับค่าช่อง Use ภายในแถวเดียวกัน (ซ้าย-ขวา เท่านั้น — ห้ามข้ามแถว)
     // ปลายทางว่าง = ย้ายเฉยๆ, ปลายทางมีคน = สลับกัน (ไม่ทับข้อมูลใครหาย)
-    async function swapUseCells(src, tgt){
-      if(!canEdit()) return;
-      if(src.id===tgt.id && src.key===tgt.key) return;
-      const srcRow=accountsRows.find(r=>r.id===src.id);
-      const tgtRow=accountsRows.find(r=>r.id===tgt.id);
-      if(!srcRow||!tgtRow) return;
-      const sv=String(srcRow[src.key]||'').trim();
-      const tv=String(tgtRow[tgt.key]||'').trim();
+    async function swapUseCells(id, srcKey, tgtKey){
+      if(!canEdit() || srcKey===tgtKey) return;
+      const row=accountsRows.find(r=>r.id===id);
+      if(!row) return;
+      const sv=String(row[srcKey]||'').trim();
+      const tv=String(row[tgtKey]||'').trim();
       if(!sv || sv==='ว่าง') return;
       const label=k=>'Use '+(USE_KEYS.indexOf(k)+1);
-      const who=r=>r.email||('ID '+r.id);
-      let msg='ย้าย "'+sv+'"\nจาก '+label(src.key)+' ('+who(srcRow)+')\nไป '+label(tgt.key)+' ('+who(tgtRow)+')';
-      if(tv && tv!=='ว่าง') msg+='\n\nช่องปลายทางมี "'+tv+'"\n→ จะสลับกลับมาไว้ที่ '+label(src.key)+' แทน';
+      let msg='ย้าย "'+sv+'"\nจาก '+label(srcKey)+' → '+label(tgtKey)+'\n('+(row.email||('ID '+row.id))+')';
+      if(tv && tv!=='ว่าง') msg+='\n\nช่องปลายทางมี "'+tv+'"\n→ จะสลับมาไว้ที่ '+label(srcKey)+' แทน';
       if(!confirm(msg)) return;
 
-      if(src.id===tgt.id){
-        // แถวเดียวกัน — อัปเดตครั้งเดียวสองช่อง
-        const payload={}; payload[src.key]=tv; payload[tgt.key]=sv;
-        const { error }=await sb.from('accounts').update(payload).eq('id', src.id);
-        if(error){ showPopup('ย้ายไม่สำเร็จ', error.message, 'error'); return; }
-        markSaved(src.id);
-        const newRow=Object.assign({}, srcRow, payload);
-        await writeAudit('UPDATE', src.id, srcRow, newRow);
-        const i=accountsRows.findIndex(r=>r.id===src.id);
-        if(i>=0) accountsRows[i]=newRow;
-        syncVRow(src.id);
-        if(!refreshRowDom(newRow)) applySearch();
-      } else {
-        // คนละแถว — อัปเดตทีละแถว (ถ้าแถวสองพลาด แถวแรกไปแล้ว → โหลดสภาพจริงด้วย applySearch)
-        const r1=await sb.from('accounts').update({ [tgt.key]: sv }).eq('id', tgt.id);
-        if(r1.error){ showPopup('ย้ายไม่สำเร็จ', r1.error.message, 'error'); return; }
-        const r2=await sb.from('accounts').update({ [src.key]: tv }).eq('id', src.id);
-        if(r2.error){ showPopup('ย้ายไม่ครบ', 'วางปลายทางแล้ว แต่ล้างช่องต้นทางไม่สำเร็จ:\n'+r2.error.message+'\n\nกรุณาแก้ช่องต้นทางเอง', 'error'); }
-        markSaved(tgt.id); markSaved(src.id);
-        const newTgt=Object.assign({}, tgtRow, { [tgt.key]: sv });
-        await writeAudit('UPDATE', tgt.id, tgtRow, newTgt);
-        const ti=accountsRows.findIndex(r=>r.id===tgt.id);
-        if(ti>=0) accountsRows[ti]=newTgt;
-        syncVRow(tgt.id);
-        if(!r2.error){
-          const newSrc=Object.assign({}, srcRow, { [src.key]: tv });
-          await writeAudit('UPDATE', src.id, srcRow, newSrc);
-          const si=accountsRows.findIndex(r=>r.id===src.id);
-          if(si>=0) accountsRows[si]=newSrc;
-          syncVRow(src.id);
-        }
-        const okT=refreshRowDom(accountsRows.find(r=>r.id===tgt.id));
-        const okS=refreshRowDom(accountsRows.find(r=>r.id===src.id));
-        if(!okT || !okS) applySearch();
-      }
+      const payload={}; payload[srcKey]=tv; payload[tgtKey]=sv;
+      const { error }=await sb.from('accounts').update(payload).eq('id', id);
+      if(error){ showPopup('ย้ายไม่สำเร็จ', error.message, 'error'); return; }
+      markSaved(id);
+      const newRow=Object.assign({}, row, payload);
+      await writeAudit('UPDATE', id, row, newRow);
+      const i=accountsRows.findIndex(r=>r.id===id);
+      if(i>=0) accountsRows[i]=newRow;
+      syncVRow(id);
+      if(!refreshRowDom(newRow)) applySearch();
       saveCache(getMaxUpdatedAt());
       updateSummary();
-      setStatus('ย้าย "'+sv+'" ไป '+label(tgt.key)+' ('+who(tgtRow)+') แล้ว');
+      setStatus('ย้าย "'+sv+'" ไป '+label(tgtKey)+' แล้ว');
     }
 
     function dateColor(value,checkWaiting){
