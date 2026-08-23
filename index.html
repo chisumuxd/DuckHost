@@ -1410,7 +1410,9 @@
       tbody.addEventListener('dragover', e=>{
         if(!dragSrc) return;
         const td=e.target.closest('td');
-        if(!td || !USE_KEYS.includes(td.dataset.fkey||'')) { clearHint(); return; }
+        // วางได้เฉพาะช่อง Use ใน "แถวเดียวกัน" เท่านั้น (ย้ายซ้าย-ขวา ไม่ให้ข้ามแถว)
+        const tr=td ? td.closest('tr') : null;
+        if(!td || !USE_KEYS.includes(td.dataset.fkey||'') || !tr || !tr._row || tr._row.id!==dragSrc.id){ clearHint(); return; }
         e.preventDefault();
         e.dataTransfer.dropEffect='move';
         if(dragHintTd!==td){ clearHint(); dragHintTd=td; td.classList.add('drop-hint'); }
@@ -1420,7 +1422,7 @@
         const src=dragSrc; dragSrc=null;
         if(!src) return;
         const r=resolve(e.target);
-        if(!r || !USE_KEYS.includes(r.key)) return;
+        if(!r || !USE_KEYS.includes(r.key) || r.row.id!==src.id) return;
         swapUseCells(src, { id:r.row.id, key:r.key });
       });
       tbody.addEventListener('dragend', ()=>{ dragSrc=null; clearHint(); });
