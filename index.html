@@ -537,6 +537,8 @@
         <div class="form-group" style="flex:none;"><input id="rcDay" type="date" onchange="rcDayPick()"></div>
         <button class="btn-gray" onclick="rcDayToday()">วันนี้</button>
         <button id="rcAllBtn" class="btn-yellow" onclick="rcToggleAll()">📋 งานค้างทุกวัน</button>
+        <input id="rcSearch" class="search-input" type="text" placeholder="🔍 ค้นหาอีเมล (ทุกวัน)" style="min-width:200px;max-width:280px;" oninput="rcSearchInput()">
+        <button class="btn-gray" onclick="rcClearSearch()">ล้าง</button>
       </div>
 
       <div id="rcPendingHead" style="font-size:14px;font-weight:800;color:#c92a2a;margin:14px 0 6px;">🔧 ยังไม่แก้ไข (<span id="rcPendingCount">0</span>)</div>
@@ -1880,16 +1882,26 @@
     function openRetryModal(){
       hideRetryAlert();
       if(rcAllPending) rcToggleAll();   // เปิดใหม่ = เริ่มที่โหมดรายวันเสมอ
+      document.getElementById('rcSearch').value='';
       document.getElementById('rcDate').value = retryDefaultDate();
       document.getElementById('rcDay').value = toDateTimeInput(new Date()).slice(0,10);
       document.getElementById('retryModalBackdrop').style.display='block';
       loadRetryCases();
     }
     function closeRetryModal(){ document.getElementById('retryModalBackdrop').style.display='none'; }
-    // ปกติ = โหลดงานที่ "กำหนดเสร็จ" ตกอยู่ในวันที่เลือก / โหมดทุกวัน = โหลดงานที่ยังไม่เสร็จทั้งหมด
+    // ค้นหาอีเมล — หน่วง 300ms กันยิง DB ทุกตัวอักษร
+    let rcSearchTimer=null;
+    function rcSearchInput(){ clearTimeout(rcSearchTimer); rcSearchTimer=setTimeout(loadRetryCases, 300); }
+    function rcSearchKeyword(){ return document.getElementById('rcSearch').value.trim(); }
+    function rcClearSearch(){ document.getElementById('rcSearch').value=''; loadRetryCases(); }
+
+    // ค้นหา = ข้ามตัวกรองวัน หาทุกวัน / ปกติ = เฉพาะวันที่เลือก / โหมดทุกวัน = งานที่ยังไม่เสร็จทั้งหมด
     async function loadRetryCases(){
       let q = sb.from('retry_cases').select('*');
-      if(rcAllPending){
+      const kw = rcSearchKeyword();
+      if(kw){
+        q = q.ilike('email', '%'+kw+'%');
+      } else if(rcAllPending){
         q = q.is('done_at', null);
       } else {
         const p=rcDayValue().split('-');
@@ -1912,13 +1924,18 @@
       const pendRows=retryRows.filter(r=>!r.done_at), doneRows=retryRows.filter(r=>r.done_at);
       document.getElementById('rcPendingCount').textContent=pendRows.length;
       document.getElementById('rcDoneCount').textContent=doneRows.length;
-      // โหมดทุกวัน = โชว์แค่งานค้าง ซ่อนตารางงานที่เสร็จแล้วทั้งหัวข้อ
+      // โหมดทุกวัน = โชว์แค่งานค้าง ซ่อนตารางงานที่เสร็จแล้ว / ตอนค้นหา = โชว์ทั้งสองส่วน
+      const searching = !!rcSearchKeyword();
+      const hideDone = rcAllPending && !searching;
       document.getElementById('rcPendingHead').firstChild.textContent =
-        rcAllPending ? '🔧 งานค้างทุกวัน (' : '🔧 ยังไม่แก้ไข (';
-      document.getElementById('rcDoneHead').style.display = rcAllPending ? 'none' : '';
-      document.getElementById('rcDoneWrap').style.display = rcAllPending ? 'none' : '';
+        searching ? '🔧 ผลค้นหา — ยังไม่แก้ไข (' : (rcAllPending ? '🔧 งานค้างทุกวัน (' : '🔧 ยังไม่แก้ไข (');
+      document.getElementById('rcDoneHead').firstChild.textContent =
+        searching ? '✅ ผลค้นหา — แก้เสร็จแล้ว (' : '✅ แก้เสร็จแล้ว (';
+      document.getElementById('rcDoneHead').style.display = hideDone ? 'none' : '';
+      document.getElementById('rcDoneWrap').style.display = hideDone ? 'none' : '';
 
-      if(pendRows.length===0) retryEmptyRow(pend, 5, rcAllPending ? 'ไม่มีงานค้างเลย 🎉' : 'ไม่มีงานค้างของวันนี้ 🎉');
+      if(pendRows.length===0) retryEmptyRow(pend, 5,
+        searching ? 'ไม่พบงานค้างของอีเมลนี้' : (rcAllPending ? 'ไม่มีงานค้างเลย 🎉' : 'ไม่มีงานค้างของวันนี้ 🎉'));
       pendRows.forEach(r=>{
         const tr=document.createElement('tr');
         [r.note, r.email, retryDueBE(r.due_date), userNameMap[r.created_by]||r.created_by||''].forEach((v,i)=>{
@@ -1934,7 +1951,7 @@
         tr.appendChild(tdAct); pend.appendChild(tr);
       });
 
-      if(doneRows.length===0) retryEmptyRow(done, 5, 'ยังไม่มีงานที่แก้เสร็จในวันนี้');
+      if(doneRows.length===0) retryEmptyRow(done, 5, searching ? 'ไม่พบงานที่เสร็จแล้วของอีเมลนี้' : 'ยังไม่มีงานที่แก้เสร็จในวันนี้');
       doneRows.forEach(r=>{
         const tr=document.createElement('tr');
         [r.note, r.email, retryDueBE(r.due_date), retryDueBE(r.done_at, true)].forEach(v=>{
