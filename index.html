@@ -1969,12 +1969,6 @@
         tr.appendChild(tdAct); done.appendChild(tr);
       });
     }
-    // บรรทัดสรุปงาน 1 งาน (ใช้ทั้งตอนแจ้งงานใหม่และสรุปงานค้าง)
-    function retryLine(r){
-      return '• '+(r.note||'(ไม่มีรายละเอียด)')
-        + (r.email ? ' — '+r.email : '')
-        + ' [กำหนด '+retryDueBE(r.due_date)+(retryIsDue(r.due_date)?' ⚠️ถึงกำหนดแล้ว':'')+']';
-    }
     async function saveRetryCase(){
       hideRetryAlert();
       if(!canEdit()){ showRetryAlert('บัญชีนี้ดูข้อมูลเท่านั้น'); return; }
@@ -1984,6 +1978,19 @@
       if(!note){ showRetryAlert('กรุณาใส่งานที่ต้องแก้'); return; }
       if(!due){ showRetryAlert('กรุณาเลือกกำหนดเสร็จ'); return; }
       const btn=document.getElementById('rcSaveBtn'); btn.disabled=true;
+
+      // กันเพิ่มซ้ำ: อีเมลเดียวกันมีงานที่ยังไม่เสร็จค้างอยู่แล้ว = ไม่ให้เพิ่มอีก
+      // (งานที่กดเสร็จแล้วไม่นับ — หัวบ้านเดิมมีปัญหาใหม่ทีหลังยังเพิ่มได้ตามปกติ)
+      if(email){
+        const { data:dup } = await sb.from('retry_cases').select('note,due_date')
+          .is('done_at', null).ilike('email', email).limit(1);
+        if(dup && dup.length){
+          btn.disabled=false;
+          showRetryAlert('อีเมลนี้มีงานค้างอยู่แล้ว: "'+(dup[0].note||'-')+'" (กำหนด '+retryDueBE(dup[0].due_date)+')\n'
+            + 'ให้ไปกด "เสร็จแล้ว" ที่งานเดิมก่อน หรือใช้ช่องค้นหาอีเมลเพื่อดูงานเดิม');
+          return;
+        }
+      }
       // เก็บเป็นต้นวัน (00:00) แบบ ISO — สรุปงานรอบ 8 โมงเช้าจะได้นับงานของวันนั้นด้วย
       const { error }=await sb.from('retry_cases').insert({
         email, note, due_date:new Date(due+'T00:00:00').toISOString(), created_by:currentUser.username });
