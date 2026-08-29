@@ -325,7 +325,7 @@
           </div>
           <div class="topbar-actions">
             <button class="btn-yellow" onclick="openGiftCard()">🎁 เบิก gift card</button>
-            <button class="btn-gray" onclick="openRetryModal()" style="position:relative;">⏳ รอตัดชำระ<span id="retryBadge" style="display:none;position:absolute;top:-7px;right:-7px;background:#fa5252;color:#fff;border-radius:10px;min-width:20px;height:20px;padding:0 5px;font-size:12px;font-weight:800;line-height:20px;text-align:center;">0</span></button>
+            <button class="btn-gray" onclick="openRetryModal()" style="position:relative;">🛠 งานรอแก้ไข<span id="retryBadge" style="display:none;position:absolute;top:-7px;right:-7px;background:#fa5252;color:#fff;border-radius:10px;min-width:20px;height:20px;padding:0 5px;font-size:12px;font-weight:800;line-height:20px;text-align:center;">0</span></button>
             <button id="manageUsersBtn" class="btn-gray" style="display:none;" onclick="openUserModal()">จัดการผู้ใช้</button>
             <button id="auditBtn" class="btn-gray" style="display:none;" onclick="openAuditModal()">ประวัติ</button>
             <button id="addBtn" class="btn-blue" onclick="openAddModal()">+ เพิ่มข้อมูล</button>
@@ -502,27 +502,51 @@
   <div id="retryModalBackdrop" class="modal-backdrop">
     <div class="modal" style="width:min(96vw,900px); max-width:none;">
       <div class="modal-header">
-        <div class="modal-title">⏳ เคสรอตัดชำระใหม่</div>
+        <div class="modal-title">🛠 งานรอแก้ไข</div>
         <button class="btn-red" onclick="closeRetryModal()">ปิด</button>
       </div>
       <div id="retryModalAlert" class="modal-alert"></div>
       <div class="form-grid" style="grid-template-columns:2fr 2fr 1fr auto; align-items:end;">
-        <div class="form-group"><label>อีเมล/ชื่อลูกค้า</label><input id="rcEmail" type="text" placeholder="เช่น customer@gmail.com" onkeydown="if(event.key==='Enter')saveRetryCase()"></div>
-        <div class="form-group"><label>หมายเหตุ</label><input id="rcNote" type="text" placeholder="เช่น บัตรตัดไม่ผ่าน" onkeydown="if(event.key==='Enter')saveRetryCase()"></div>
-        <div class="form-group"><label>นัดตัดอีกครั้ง</label><input id="rcDate" type="date"></div>
-        <div class="form-group"><button id="rcSaveBtn" class="btn-primary" onclick="saveRetryCase()">เพิ่มเคส</button></div>
+        <div class="form-group"><label>งานที่ต้องแก้</label><input id="rcNote" type="text" placeholder="เช่น บัตรตัดไม่ผ่าน รอตัดใหม่" onkeydown="if(event.key==='Enter')saveRetryCase()"></div>
+        <div class="form-group"><label>หัวบ้าน/ลูกค้า <span style="color:#888;font-weight:400;">(ไม่ใส่ก็ได้)</span></label><input id="rcEmail" type="text" placeholder="เช่น customer@gmail.com" onkeydown="if(event.key==='Enter')saveRetryCase()"></div>
+        <div class="form-group"><label>กำหนดเสร็จ (วัน)</label><input id="rcDate" type="date"></div>
+        <div class="form-group"><button id="rcSaveBtn" class="btn-primary" onclick="saveRetryCase()">เพิ่มงาน</button></div>
       </div>
-      <div style="font-size:12px;color:#888;margin-top:6px;">ค่าเริ่มต้น = วันนี้ + 3 วัน • ถึงกำหนด/เลยกำหนด = ช่องวันที่ขึ้นสีแดง</div>
-      <div class="table-wrap" style="margin-top:12px; max-height:50vh;">
+      <div style="font-size:12px;color:#888;margin-top:8px;">
+        ระบบสรุป "งานที่ยังค้าง" ส่งเข้ากลุ่มไลน์ทุกวัน 8 โมงเช้า และ 5 โมงเย็น (งานที่กดเสร็จแล้วไม่ถูกส่ง) • งานที่ถึงกำหนดแล้วช่องวันที่ขึ้นสีแดง
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:2px dashed #ffe066;">
+        <span style="font-size:13px;font-weight:800;color:#2f6b3a;">ดูงานของวันที่:</span>
+        <div class="form-group" style="flex:none;"><input id="rcDay" type="date" onchange="loadRetryCases()"></div>
+        <button class="btn-gray" onclick="rcDayToday()">วันนี้</button>
+      </div>
+
+      <div style="font-size:14px;font-weight:800;color:#c92a2a;margin:14px 0 6px;">🔧 ยังไม่แก้ไข (<span id="rcPendingCount">0</span>)</div>
+      <div class="table-wrap" style="max-height:34vh;">
         <table style="width:100%; table-layout:fixed;">
           <thead><tr>
-            <th style="width:26%;">อีเมล/ชื่อลูกค้า</th>
-            <th style="width:26%;">หมายเหตุ</th>
-            <th style="width:13%;">นัดตัด</th>
-            <th style="width:13%;">ผู้เพิ่ม</th>
-            <th style="width:22%;">จัดการ</th>
+            <th style="width:30%;">งานที่ต้องแก้</th>
+            <th style="width:22%;">หัวบ้าน/ลูกค้า</th>
+            <th style="width:15%;">กำหนดเสร็จ</th>
+            <th style="width:13%;">ผู้แจ้ง</th>
+            <th style="width:20%;">จัดการ</th>
           </tr></thead>
           <tbody id="retryTableBody"></tbody>
+        </table>
+      </div>
+
+      <div style="font-size:14px;font-weight:800;color:#2f9e44;margin:16px 0 6px;">✅ แก้เสร็จแล้ว (<span id="rcDoneCount">0</span>)</div>
+      <div class="table-wrap" style="max-height:34vh;">
+        <table style="width:100%; table-layout:fixed;">
+          <thead><tr>
+            <th style="width:30%;">งานที่ต้องแก้</th>
+            <th style="width:22%;">หัวบ้าน/ลูกค้า</th>
+            <th style="width:15%;">กำหนดเสร็จ</th>
+            <th style="width:13%;">เสร็จเมื่อ</th>
+            <th style="width:20%;">คนแก้ / จัดการ</th>
+          </tr></thead>
+          <tbody id="retryDoneBody"></tbody>
         </table>
       </div>
     </div>
@@ -1763,71 +1787,131 @@
       });
     }
 
-    /* ===== เคสรอตัดชำระใหม่ (ตาราง retry_cases) =====
+    /* ===== งานรอแก้ไข (ยังใช้ตารางเดิมชื่อ retry_cases — ไม่ต้องย้ายข้อมูล)
+       note = งานที่ต้องแก้, email = หัวบ้าน/ลูกค้า (ไม่บังคับ), due_date = กำหนดเสร็จ
        ครั้งแรกต้องรัน SQL นี้ใน Supabase → SQL Editor:
 
        create table if not exists retry_cases (
          id bigint generated always as identity primary key,
          email text not null,
          note text default '',
-         due_date date not null,
+         due_date timestamptz not null,
+         notified boolean not null default false,
+         done_at timestamptz,
+         done_by text,
          created_by text default '',
          created_at timestamptz default now()
        );
        alter table retry_cases enable row level security;
        create policy "auth all retry" on retry_cases
          for all to authenticated using (true) with check (true);
+
+       ถ้าเคยสร้างตารางไว้แล้ว ให้รันอันนี้แทน (เพิ่มคอลัมน์ที่ขาด):
+       alter table retry_cases
+         alter column due_date type timestamptz using due_date::timestamptz,
+         add column if not exists notified boolean not null default false,
+         add column if not exists done_at timestamptz,
+         add column if not exists done_by text;
     */
     let retryRows = [];
-    function retryDefaultDate(){ const d=new Date(); d.setDate(d.getDate()+3);
-      return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-    // due_date เก็บเป็น YYYY-MM-DD → โชว์เป็น ว/ด/พ.ศ. 2 หลัก เหมือนช่องวันที่อื่นๆ
-    function retryDueBE(iso){ if(!iso) return ''; const p=String(iso).split('-');
-      return (+p[2])+'/'+(+p[1])+'/'+String((+p[0]+543)%100).padStart(2,'0'); }
-    function retryIsDue(iso){ if(!iso) return false; const p=String(iso).split('-');
-      const d=new Date(+p[0],+p[1]-1,+p[2]); const n=new Date();
-      return d.getTime() <= new Date(n.getFullYear(),n.getMonth(),n.getDate()).getTime(); }
-    function updateRetryBadge(){
-      const n=retryRows.filter(r=>retryIsDue(r.due_date)).length;
+    // แปลง Date → ค่าที่ช่อง datetime-local ใช้ได้ (เวลาท้องถิ่น ไม่ใช่ UTC)
+    function toDateTimeInput(d){ const p=n=>String(n).padStart(2,'0');
+      return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes()); }
+    function retryDefaultDate(){ return toDateTimeInput(new Date()).slice(0,10); }
+    // due_date เก็บเป็น timestamptz → โชว์เป็น ว/ด/พ.ศ. 2 หลัก (ใส่ withTime=true ถ้าต้องการเวลาด้วย)
+    function retryDueBE(iso, withTime){ if(!iso) return ''; const d=new Date(iso); if(isNaN(d)) return '';
+      const p=n=>String(n).padStart(2,'0');
+      return d.getDate()+'/'+(d.getMonth()+1)+'/'+p((d.getFullYear()+543)%100)
+        + (withTime ? ' '+p(d.getHours())+':'+p(d.getMinutes()) : ''); }
+    function retryIsDue(iso){ if(!iso) return false; const d=new Date(iso);
+      return !isNaN(d) && d.getTime() <= Date.now(); }
+    // ป้ายแดง = งานที่ยังไม่แก้ + ถึงกำหนดแล้ว (นับทุกวัน ไม่ใช่เฉพาะวันที่กำลังดู)
+    async function updateRetryBadge(){
+      const { count } = await sb.from('retry_cases').select('id',{ count:'exact', head:true })
+        .is('done_at', null).lte('due_date', new Date().toISOString());
       const b=document.getElementById('retryBadge');
-      if(b){ b.textContent=n; b.style.display = n>0 ? 'inline-block' : 'none'; }
+      if(b){ b.textContent=count||0; b.style.display = (count>0) ? 'inline-block' : 'none'; }
+    }
+    // ===== ตัวเลือกวันที่ของรายการงาน =====
+    function rcDayValue(){
+      const el=document.getElementById('rcDay');
+      if(!el.value) el.value = toDateTimeInput(new Date()).slice(0,10);
+      return el.value;
+    }
+    function rcDayToday(){
+      document.getElementById('rcDay').value = toDateTimeInput(new Date()).slice(0,10);
+      loadRetryCases();
     }
     function showRetryAlert(m){ const el=document.getElementById('retryModalAlert'); el.textContent=m; el.className='modal-alert show'; }
     function hideRetryAlert(){ const el=document.getElementById('retryModalAlert'); el.textContent=''; el.className='modal-alert'; }
     function openRetryModal(){
       hideRetryAlert();
       document.getElementById('rcDate').value = retryDefaultDate();
+      document.getElementById('rcDay').value = toDateTimeInput(new Date()).slice(0,10);
       document.getElementById('retryModalBackdrop').style.display='block';
       loadRetryCases();
     }
     function closeRetryModal(){ document.getElementById('retryModalBackdrop').style.display='none'; }
+    // โหลดเฉพาะงานที่ "กำหนดเสร็จ" ตกอยู่ในวันที่เลือก
     async function loadRetryCases(){
+      const p=rcDayValue().split('-');
+      const start=new Date(+p[0],+p[1]-1,+p[2]);
+      const end=new Date(start); end.setDate(end.getDate()+1);
       const { data, error } = await sb.from('retry_cases').select('*')
+        .gte('due_date', start.toISOString()).lt('due_date', end.toISOString())
         .order('due_date',{ascending:true}).order('id',{ascending:true});
-      if(error){ showRetryAlert('โหลดไม่สำเร็จ: '+error.message+'\n(ถ้าเพิ่งใช้ครั้งแรก ให้รัน SQL สร้างตาราง retry_cases ก่อน — ดูคอมเมนต์เหนือฟังก์ชันนี้ในโค้ด)'); return; }
+      if(error){ showRetryAlert('โหลดไม่สำเร็จ: '+error.message+'\n(ถ้าเพิ่งใช้ครั้งแรก ให้รัน SQL สร้าง/อัปเดตตาราง retry_cases ก่อน — ดูคอมเมนต์เหนือฟังก์ชันนี้ในโค้ด)'); return; }
       retryRows=data||[]; renderRetryTable(); updateRetryBadge();
     }
+    // แถวว่าง (ใช้ตอนไม่มีงานในวันนั้น)
+    function retryEmptyRow(tbody, cols, text){
+      const tr=document.createElement('tr'); const td=document.createElement('td');
+      td.colSpan=cols; td.textContent=text; td.style.color='#888'; tr.appendChild(td); tbody.appendChild(tr);
+    }
     function renderRetryTable(){
-      const tbody=document.getElementById('retryTableBody'); tbody.innerHTML='';
-      if(retryRows.length===0){
-        const tr=document.createElement('tr'); const td=document.createElement('td');
-        td.colSpan=5; td.textContent='ไม่มีเคสค้าง 🎉'; tr.appendChild(td); tbody.appendChild(tr); return;
-      }
-      retryRows.forEach(r=>{
+      const pend=document.getElementById('retryTableBody'), done=document.getElementById('retryDoneBody');
+      pend.innerHTML=''; done.innerHTML='';
+      const pendRows=retryRows.filter(r=>!r.done_at), doneRows=retryRows.filter(r=>r.done_at);
+      document.getElementById('rcPendingCount').textContent=pendRows.length;
+      document.getElementById('rcDoneCount').textContent=doneRows.length;
+
+      if(pendRows.length===0) retryEmptyRow(pend, 5, 'ไม่มีงานค้างของวันนี้ 🎉');
+      pendRows.forEach(r=>{
         const tr=document.createElement('tr');
-        [r.email, r.note, retryDueBE(r.due_date), userNameMap[r.created_by]||r.created_by||''].forEach((v,i)=>{
+        [r.note, r.email, retryDueBE(r.due_date), userNameMap[r.created_by]||r.created_by||''].forEach((v,i)=>{
           const td=document.createElement('td'); td.textContent=v||'';
           if(i===2 && retryIsDue(r.due_date)){ td.style.backgroundColor='#ff0000'; td.classList.add('cellcolor'); }
           tr.appendChild(td);
         });
         const tdAct=document.createElement('td'); tdAct.className='actions';
         if(canEdit()){
-          const pb=document.createElement('button'); pb.className='btn-yellow'; pb.textContent='+3 วัน'; pb.title='เลื่อนนัดออกไปอีก 3 วัน'; pb.onclick=()=>postponeRetryCase(r);
-          const db=document.createElement('button'); db.className='btn-primary'; db.textContent='เสร็จสิ้น'; db.style.marginLeft='4px'; db.onclick=()=>finishRetryCase(r);
-          tdAct.appendChild(pb); tdAct.appendChild(db);
+          const b=document.createElement('button'); b.className='btn-primary'; b.textContent='เสร็จแล้ว'; b.onclick=()=>finishRetryCase(r);
+          tdAct.appendChild(b);
         } else tdAct.textContent='ดูเท่านั้น';
-        tr.appendChild(tdAct); tbody.appendChild(tr);
+        tr.appendChild(tdAct); pend.appendChild(tr);
       });
+
+      if(doneRows.length===0) retryEmptyRow(done, 5, 'ยังไม่มีงานที่แก้เสร็จในวันนี้');
+      doneRows.forEach(r=>{
+        const tr=document.createElement('tr');
+        [r.note, r.email, retryDueBE(r.due_date), retryDueBE(r.done_at, true)].forEach(v=>{
+          const td=document.createElement('td'); td.textContent=v||''; tr.appendChild(td);
+        });
+        const tdAct=document.createElement('td'); tdAct.className='actions';
+        tdAct.style.textAlign='left';
+        tdAct.textContent=(userNameMap[r.done_by]||r.done_by||'-')+' ';
+        if(canEdit()){
+          const b=document.createElement('button'); b.className='btn-gray'; b.textContent='↩ กลับมาแก้'; b.title='ย้ายกลับไปที่งานยังไม่แก้ไข'; b.onclick=()=>reopenRetryCase(r);
+          tdAct.appendChild(b);
+        }
+        tr.appendChild(tdAct); done.appendChild(tr);
+      });
+    }
+    // บรรทัดสรุปงาน 1 งาน (ใช้ทั้งตอนแจ้งงานใหม่และสรุปงานค้าง)
+    function retryLine(r){
+      return '• '+(r.note||'(ไม่มีรายละเอียด)')
+        + (r.email ? ' — '+r.email : '')
+        + ' [กำหนด '+retryDueBE(r.due_date)+(retryIsDue(r.due_date)?' ⚠️ถึงกำหนดแล้ว':'')+']';
     }
     async function saveRetryCase(){
       hideRetryAlert();
@@ -1835,29 +1919,38 @@
       const email=document.getElementById('rcEmail').value.trim();
       const note=document.getElementById('rcNote').value.trim();
       const due=document.getElementById('rcDate').value;
-      if(!email){ showRetryAlert('กรุณาใส่อีเมล/ชื่อลูกค้า'); return; }
-      if(!due){ showRetryAlert('กรุณาเลือกวันนัดตัด'); return; }
+      if(!note){ showRetryAlert('กรุณาใส่งานที่ต้องแก้'); return; }
+      if(!due){ showRetryAlert('กรุณาเลือกกำหนดเสร็จ'); return; }
       const btn=document.getElementById('rcSaveBtn'); btn.disabled=true;
-      const { error }=await sb.from('retry_cases').insert({ email, note, due_date:due, created_by:currentUser.username });
+      // เก็บเป็นต้นวัน (00:00) แบบ ISO — สรุปงานรอบ 8 โมงเช้าจะได้นับงานของวันนั้นด้วย
+      const { error }=await sb.from('retry_cases').insert({
+        email, note, due_date:new Date(due+'T00:00:00').toISOString(), created_by:currentUser.username });
       btn.disabled=false;
       if(error){ showRetryAlert('บันทึกไม่สำเร็จ: '+error.message); return; }
       document.getElementById('rcEmail').value=''; document.getElementById('rcNote').value='';
+      document.getElementById('rcDay').value=due.slice(0,10);   // เด้งไปดูวันของงานที่เพิ่งเพิ่ม
       document.getElementById('rcDate').value=retryDefaultDate();
       await loadRetryCases();
     }
-    async function postponeRetryCase(r){
-      const p=String(r.due_date).split('-'); const d=new Date(+p[0],+p[1]-1,+p[2]); d.setDate(d.getDate()+3);
-      const nd=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-      const { error }=await sb.from('retry_cases').update({ due_date:nd }).eq('id',r.id);
-      if(error){ showRetryAlert('เลื่อนไม่สำเร็จ: '+error.message); return; }
-      await loadRetryCases();
-    }
+    // เสร็จแล้ว = ทำเครื่องหมาย ไม่ลบทิ้ง (จะได้ย้อนดูงานที่ทำไปแล้วในแต่ละวันได้)
     async function finishRetryCase(r){
-      if(!confirm('เคส "'+r.email+'" ตัดชำระเรียบร้อยแล้ว?\n(รายการจะถูกลบออกจากหน้ารอตัด)')) return;
-      const { error }=await sb.from('retry_cases').delete().eq('id',r.id);
-      if(error){ showRetryAlert('ลบไม่สำเร็จ: '+error.message); return; }
+      if(!confirm('งาน "'+(r.note||r.email)+'" แก้เรียบร้อยแล้ว?')) return;
+      const { error }=await sb.from('retry_cases')
+        .update({ done_at:new Date().toISOString(), done_by:currentUser.username }).eq('id',r.id);
+      if(error){ showRetryAlert('บันทึกไม่สำเร็จ: '+error.message); return; }
       await loadRetryCases();
     }
+    async function reopenRetryCase(r){
+      const { error }=await sb.from('retry_cases').update({ done_at:null, done_by:null }).eq('id',r.id);
+      if(error){ showRetryAlert('ย้ายกลับไม่สำเร็จ: '+error.message); return; }
+      await loadRetryCases();
+    }
+
+    /* ===== แจ้งเตือนกลุ่มไลน์ =====
+       ทำงานฝั่ง Supabase ทั้งหมด ไม่มีโค้ดส่งไลน์ในหน้าเว็บ:
+       pg_cron เรียก Edge Function 'line-notify' วันละ 2 รอบ (8 โมงเช้า / 5 โมงเย็น เวลาไทย)
+       → สรุปงานที่ยังไม่กดเสร็จ และถึงกำหนดแล้ว → ส่งเป็นข้อความเดียวเข้ากลุ่ม
+       ตั้งค่า: supabase/functions/line-notify/index.ts + setup_line_cron.sql */
 
     async function quickEditCell(row, key, header, oldValue){
       if(!canEdit()){ showPopup('ไม่มีสิทธิ์','บัญชีนี้ดูข้อมูลเท่านั้น','error'); return; }
