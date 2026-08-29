@@ -205,6 +205,8 @@
       font-family:'Sarabun',sans-serif;
     }
     .rc-tag:hover{ background:#d8f3df; }
+    /* ช่องจัดการของงานที่เสร็จแล้ว — ห้ามตัดปุ่มทิ้งเป็น ... */
+    #retryDoneBody td.actions{ overflow:visible; text-overflow:clip; }
     body.dark .rc-tag{ background:#1e2a22; border-color:#2f5138; color:#8ce99a; }
 
     /* ===== POPUP ===== */
@@ -555,11 +557,11 @@
       <div id="rcDoneWrap" class="table-wrap" style="max-height:34vh;">
         <table style="width:100%; table-layout:fixed;">
           <thead><tr>
-            <th style="width:30%;">งานที่ต้องแก้</th>
-            <th style="width:22%;">หัวบ้าน/ลูกค้า</th>
-            <th style="width:15%;">กำหนดเสร็จ</th>
-            <th style="width:13%;">เสร็จเมื่อ</th>
-            <th style="width:20%;">คนแก้ / จัดการ</th>
+            <th style="width:24%;">งานที่ต้องแก้</th>
+            <th style="width:18%;">หัวบ้าน/ลูกค้า</th>
+            <th style="width:12%;">กำหนดเสร็จ</th>
+            <th style="width:14%;">เสร็จเมื่อ</th>
+            <th style="width:32%;">คนแก้ / จัดการ</th>
           </tr></thead>
           <tbody id="retryDoneBody"></tbody>
         </table>
