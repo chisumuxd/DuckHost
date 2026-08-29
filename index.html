@@ -198,6 +198,14 @@
     }
     .form-group input:focus,.form-group select:focus,.form-group textarea:focus{ border-color:#40c057; }
     .hint-red{ font-size:10px; color:#c00; margin-left:4px; }
+    /* ปุ่มข้อความสำเร็จรูป (หน้างานรอแก้ไข) */
+    .rc-tag{
+      border:1px solid #40c057; background:#eefaf2; color:#0f5132;
+      border-radius:8px; padding:6px 12px; font-size:13px; font-weight:700; cursor:pointer;
+      font-family:'Sarabun',sans-serif;
+    }
+    .rc-tag:hover{ background:#d8f3df; }
+    body.dark .rc-tag{ background:#1e2a22; border-color:#2f5138; color:#8ce99a; }
 
     /* ===== POPUP ===== */
     .popup-backdrop{
@@ -512,17 +520,24 @@
         <div class="form-group"><label>กำหนดเสร็จ (วัน)</label><input id="rcDate" type="date"></div>
         <div class="form-group"><button id="rcSaveBtn" class="btn-primary" onclick="saveRetryCase()">เพิ่มงาน</button></div>
       </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px;">
+        <span style="font-size:12px;font-weight:700;color:#888;">ข้อความสำเร็จรูป:</span>
+        <button class="rc-tag" onclick="rcSetNote('หลุดพรีเมี่ยม')">หลุดพรีเมี่ยม</button>
+        <button class="rc-tag" onclick="rcSetNote('รอตัดชำระใหม่')">รอตัดชำระใหม่</button>
+        <button class="rc-tag" onclick="rcSetNote('รอเข้าเช็ค')">รอเข้าเช็ค</button>
+      </div>
       <div style="font-size:12px;color:#888;margin-top:8px;">
         ระบบสรุป "งานที่ยังค้าง" ส่งเข้ากลุ่มไลน์ทุกวัน 8 โมงเช้า และ 5 โมงเย็น (งานที่กดเสร็จแล้วไม่ถูกส่ง) • งานที่ถึงกำหนดแล้วช่องวันที่ขึ้นสีแดง
       </div>
 
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:2px dashed #ffe066;">
         <span style="font-size:13px;font-weight:800;color:#2f6b3a;">ดูงานของวันที่:</span>
-        <div class="form-group" style="flex:none;"><input id="rcDay" type="date" onchange="loadRetryCases()"></div>
+        <div class="form-group" style="flex:none;"><input id="rcDay" type="date" onchange="rcDayPick()"></div>
         <button class="btn-gray" onclick="rcDayToday()">วันนี้</button>
+        <button id="rcAllBtn" class="btn-yellow" onclick="rcToggleAll()">📋 งานค้างทุกวัน</button>
       </div>
 
-      <div style="font-size:14px;font-weight:800;color:#c92a2a;margin:14px 0 6px;">🔧 ยังไม่แก้ไข (<span id="rcPendingCount">0</span>)</div>
+      <div id="rcPendingHead" style="font-size:14px;font-weight:800;color:#c92a2a;margin:14px 0 6px;">🔧 ยังไม่แก้ไข (<span id="rcPendingCount">0</span>)</div>
       <div class="table-wrap" style="max-height:34vh;">
         <table style="width:100%; table-layout:fixed;">
           <thead><tr>
@@ -536,8 +551,8 @@
         </table>
       </div>
 
-      <div style="font-size:14px;font-weight:800;color:#2f9e44;margin:16px 0 6px;">✅ แก้เสร็จแล้ว (<span id="rcDoneCount">0</span>)</div>
-      <div class="table-wrap" style="max-height:34vh;">
+      <div id="rcDoneHead" style="font-size:14px;font-weight:800;color:#2f9e44;margin:16px 0 6px;">✅ แก้เสร็จแล้ว (<span id="rcDoneCount">0</span>)</div>
+      <div id="rcDoneWrap" class="table-wrap" style="max-height:34vh;">
         <table style="width:100%; table-layout:fixed;">
           <thead><tr>
             <th style="width:30%;">งานที่ต้องแก้</th>
@@ -1818,6 +1833,10 @@
     function toDateTimeInput(d){ const p=n=>String(n).padStart(2,'0');
       return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes()); }
     function retryDefaultDate(){ return toDateTimeInput(new Date()).slice(0,10); }
+    // ปุ่มข้อความสำเร็จรูป → ใส่ในช่อง "งานที่ต้องแก้" (พิมพ์ต่อ/แก้เองได้)
+    function rcSetNote(text){
+      const el=document.getElementById('rcNote'); el.value=text; el.focus({preventScroll:true});
+    }
     // due_date เก็บเป็น timestamptz → โชว์เป็น ว/ด/พ.ศ. 2 หลัก (ใส่ withTime=true ถ้าต้องการเวลาด้วย)
     function retryDueBE(iso, withTime){ if(!iso) return ''; const d=new Date(iso); if(isNaN(d)) return '';
       const p=n=>String(n).padStart(2,'0');
@@ -1839,27 +1858,44 @@
       return el.value;
     }
     function rcDayToday(){
+      rcAllPending=false;
       document.getElementById('rcDay').value = toDateTimeInput(new Date()).slice(0,10);
+      loadRetryCases();
+    }
+    // เลือกวันเอง = ออกจากโหมดทุกวันโดยอัตโนมัติ
+    function rcDayPick(){ rcAllPending=false; loadRetryCases(); }
+    // โหมด "งานค้างทุกวัน" — รวมงานที่ยังไม่แก้ทุกวันไว้ที่เดียว ซ่อนตารางงานที่เสร็จแล้ว
+    let rcAllPending = false;
+    function rcToggleAll(){
+      rcAllPending=!rcAllPending;
+      const b=document.getElementById('rcAllBtn');
+      b.textContent = rcAllPending ? '📅 กลับไปดูรายวัน' : '📋 งานค้างทุกวัน';
+      b.className = rcAllPending ? 'btn-gray' : 'btn-yellow';
       loadRetryCases();
     }
     function showRetryAlert(m){ const el=document.getElementById('retryModalAlert'); el.textContent=m; el.className='modal-alert show'; }
     function hideRetryAlert(){ const el=document.getElementById('retryModalAlert'); el.textContent=''; el.className='modal-alert'; }
     function openRetryModal(){
       hideRetryAlert();
+      if(rcAllPending) rcToggleAll();   // เปิดใหม่ = เริ่มที่โหมดรายวันเสมอ
       document.getElementById('rcDate').value = retryDefaultDate();
       document.getElementById('rcDay').value = toDateTimeInput(new Date()).slice(0,10);
       document.getElementById('retryModalBackdrop').style.display='block';
       loadRetryCases();
     }
     function closeRetryModal(){ document.getElementById('retryModalBackdrop').style.display='none'; }
-    // โหลดเฉพาะงานที่ "กำหนดเสร็จ" ตกอยู่ในวันที่เลือก
+    // ปกติ = โหลดงานที่ "กำหนดเสร็จ" ตกอยู่ในวันที่เลือก / โหมดทุกวัน = โหลดงานที่ยังไม่เสร็จทั้งหมด
     async function loadRetryCases(){
-      const p=rcDayValue().split('-');
-      const start=new Date(+p[0],+p[1]-1,+p[2]);
-      const end=new Date(start); end.setDate(end.getDate()+1);
-      const { data, error } = await sb.from('retry_cases').select('*')
-        .gte('due_date', start.toISOString()).lt('due_date', end.toISOString())
-        .order('due_date',{ascending:true}).order('id',{ascending:true});
+      let q = sb.from('retry_cases').select('*');
+      if(rcAllPending){
+        q = q.is('done_at', null);
+      } else {
+        const p=rcDayValue().split('-');
+        const start=new Date(+p[0],+p[1]-1,+p[2]);
+        const end=new Date(start); end.setDate(end.getDate()+1);
+        q = q.gte('due_date', start.toISOString()).lt('due_date', end.toISOString());
+      }
+      const { data, error } = await q.order('due_date',{ascending:true}).order('id',{ascending:true});
       if(error){ showRetryAlert('โหลดไม่สำเร็จ: '+error.message+'\n(ถ้าเพิ่งใช้ครั้งแรก ให้รัน SQL สร้าง/อัปเดตตาราง retry_cases ก่อน — ดูคอมเมนต์เหนือฟังก์ชันนี้ในโค้ด)'); return; }
       retryRows=data||[]; renderRetryTable(); updateRetryBadge();
     }
@@ -1874,8 +1910,13 @@
       const pendRows=retryRows.filter(r=>!r.done_at), doneRows=retryRows.filter(r=>r.done_at);
       document.getElementById('rcPendingCount').textContent=pendRows.length;
       document.getElementById('rcDoneCount').textContent=doneRows.length;
+      // โหมดทุกวัน = โชว์แค่งานค้าง ซ่อนตารางงานที่เสร็จแล้วทั้งหัวข้อ
+      document.getElementById('rcPendingHead').firstChild.textContent =
+        rcAllPending ? '🔧 งานค้างทุกวัน (' : '🔧 ยังไม่แก้ไข (';
+      document.getElementById('rcDoneHead').style.display = rcAllPending ? 'none' : '';
+      document.getElementById('rcDoneWrap').style.display = rcAllPending ? 'none' : '';
 
-      if(pendRows.length===0) retryEmptyRow(pend, 5, 'ไม่มีงานค้างของวันนี้ 🎉');
+      if(pendRows.length===0) retryEmptyRow(pend, 5, rcAllPending ? 'ไม่มีงานค้างเลย 🎉' : 'ไม่มีงานค้างของวันนี้ 🎉');
       pendRows.forEach(r=>{
         const tr=document.createElement('tr');
         [r.note, r.email, retryDueBE(r.due_date), userNameMap[r.created_by]||r.created_by||''].forEach((v,i)=>{
