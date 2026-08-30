@@ -2474,12 +2474,17 @@ function showClaimResult(row, newValue){
   // ข้อความชุดเดียว (นี่คือค่าที่จะถูกคัดลอก)
   const combined = 'หัวบ้าน\n'+head+'\n\nลูกบ้าน\n'+tenant;
 
+  // แสดงเป็น 2 บล็อกคุมระยะห่างเอง (ไม่ใช้บรรทัดว่างจาก \n\n ที่ทำให้ห่างเกิน)
+  // ส่วนข้อความที่คัดลอกยังเป็น combined เหมือนเดิม
   const html =
     '<div style="text-align:left;">'
     + '<div style="background:#f1faf4;border:1px solid #c3ebcf;border-radius:10px;'
-    +      'padding:12px 14px;font-size:14px;color:#2b3a2e;white-space:pre-wrap;'
-    +      'word-break:break-all;line-height:1.7;">'
-    +   escapeHtml(combined)
+    +      'padding:12px 14px;font-size:14px;color:#2b3a2e;'
+    +      'word-break:break-all;line-height:1.45;">'
+    +   '<div style="font-weight:800;">หัวบ้าน</div>'
+    +   '<div>'+escapeHtml(head)+'</div>'
+    +   '<div style="font-weight:800;margin-top:9px;">ลูกบ้าน</div>'
+    +   '<div>'+escapeHtml(tenant)+'</div>'
     + '</div>'
     + '<button class="btn-yellow claim-copy" style="margin-top:12px;width:100%;padding:10px;">📋 คัดลอกทั้งหมด</button>'
     + '</div>';
