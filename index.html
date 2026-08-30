@@ -421,6 +421,7 @@
             <select id="roomMachineSel" style="display:none;" onchange="applySearch()" title="กรองห้องว่างตามเครื่อง"></select>
             <label class="chk-label"><input id="chkUseDate" type="checkbox" onchange="applySearch()">ค้นจากวันที่ (Use 1-5)</label>
             <label class="chk-label"><input id="chkMachine" type="checkbox" onchange="applySearch()">ค้นจากเครื่อง</label>
+            <button id="fixFilterBtn" class="btn-gray" onclick="toggleFixFilter()" title="กดสลับ: ทั้งหมด → ยังไม่ได้แก้ไข → แก้ไขแล้ว">🔧 สถานะแก้ไข: ทั้งหมด</button>
             <button class="btn-gray" onclick="clearSearch()">ล้างผลค้นหา</button>
           </div>
         </div>
@@ -608,6 +609,9 @@
     }
     let machineOptions = [];
     let userNameMap = {};
+    // อีเมลหัวบ้าน (ตัวพิมพ์เล็ก) → งานล่าสุดของหัวบ้านนั้นในตาราง retry_cases
+    // ใช้วาดคอลัมน์ "การแก้ไข" ในตารางหลัก
+    let retryByEmail = {};
 
     const GIFT_CARD_URL = 'https://chisumuxd.github.io/DuckApple/';
     function openGiftCard(){
@@ -653,6 +657,7 @@
       { key:'contact', header:'เบอร์ลูกค้า', width:120},
       { key:'expire_date', header:'หมดอายุ', dateExpire:true, width:90},
       { key:'status', header:'สถานะ', width:100},
+      { key:'__fix', header:'การแก้ไข', width:120},   // ผูกกับงานรอแก้ไข (retry_cases) — กดเพื่อเปลี่ยนสถานะ
       { key:'credit', header:'เครดิต', width:60},
       { key:'fill_date', header:'เติม Gift ล่าสุด', width:100},
       { key:'apple_email', header:'Email Apple ID', width:240},
@@ -1166,6 +1171,24 @@
       machineOptions = Array.from(set);
     }
 
+    // ตัวกรองตามคอลัมน์ "การแก้ไข" — '' = ทั้งหมด | 'pending' = ยังไม่ได้แก้ไข | 'done' = แก้ไขแล้ว
+    let fixFilter = '';
+    function renderFixFilterBtn(){
+      const b=document.getElementById('fixFilterBtn');
+      b.textContent = fixFilter==='pending' ? '🔧 ยังไม่ได้แก้ไข' : (fixFilter==='done' ? '✅ แก้ไขแล้ว' : '🔧 สถานะแก้ไข: ทั้งหมด');
+      b.className   = fixFilter==='pending' ? 'btn-red'          : (fixFilter==='done' ? 'btn-primary' : 'btn-gray');
+    }
+    function toggleFixFilter(){
+      fixFilter = fixFilter==='' ? 'pending' : (fixFilter==='pending' ? 'done' : '');
+      renderFixFilterBtn();
+      applySearch();
+    }
+    function matchFixFilter(row){
+      if(!fixFilter) return true;
+      const t=retryTaskFor(row);
+      return fixFilter==='pending' ? !!(t && !t.done_at) : !!(t && t.done_at);
+    }
+
     function applySearch(){
       if(isRoomPage){ renderRoomPage(); return; }
       const keyword=document.getElementById('searchInput').value.trim().toLowerCase();
@@ -1175,11 +1198,11 @@
       let selectedDate=null; if(dateStr){const p=dateStr.split('-'); selectedDate=new Date(+p[0],+p[1]-1,+p[2]);}
       const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
 
-      const filterSig = JSON.stringify([keyword, dateStr, chkMachine, chkUseDate, isExpiredPage, expireSort]);
+      const filterSig = JSON.stringify([keyword, dateStr, chkMachine, chkUseDate, isExpiredPage, expireSort, fixFilter]);
       const resetScroll = (filterSig !== lastFilterSig);
       lastFilterSig = filterSig;
 
-      const hasFilter = !!(keyword || dateStr || isExpiredPage);
+      const hasFilter = !!(keyword || dateStr || isExpiredPage || fixFilter);
       if(!hasFilter){
         renderTable(sortedForDisplay(accountsRows), { resetScroll });   // แสดงทั้งหมด — เบาเพราะ virtual scroll
         return;
@@ -1195,6 +1218,7 @@
           });
           if(!ok) return false;
         }
+        if(!matchFixFilter(row)) return false;
         if(isExpiredPage){ const d=extractDate(row.expire_date); if(!d||d.getTime()>today.getTime()) return false; }
         if(selectedDate){ const d=extractDate(row.expire_date); if(!d||d.getTime()!==selectedDate.getTime()) return false; }
         return true;
@@ -1215,6 +1239,7 @@
     function clearSearch(){
       document.getElementById('searchInput').value=''; document.getElementById('searchDateInput').value='';
       document.getElementById('chkMachine').checked=false; document.getElementById('chkUseDate').checked=false;
+      fixFilter=''; renderFixFilterBtn();
       applySearch(); setStatus('ล้างผลค้นหาแล้ว');
     }
     function toggleExpiredPage(){
@@ -1275,6 +1300,7 @@
       DISPLAY_FIELDS.forEach(f=>{
         const td=document.createElement('td');
         td.dataset.fkey = f.key;
+        if(f.key==='__fix'){ td.appendChild(fixBadge(row)); tr.appendChild(td); return; }
         let value=row[f.key]||'';
         if(useTarget&&USE_KEYS.includes(f.key)){ const d=extractDate(value); if(!d||d.getTime()!==useTarget.getTime()) value=''; }
         if(f.key==='status'){ value = effectiveStatus(row); }
@@ -1300,6 +1326,57 @@
       } else { tdAct.textContent='ดูเท่านั้น'; }
       tr.appendChild(tdAct);
       return tr;
+    }
+
+    // ===== คอลัมน์ "การแก้ไข" — ผูกกับงานรอแก้ไข (retry_cases) =====
+    function retryTaskFor(row){ return retryByEmail[String(row.email||'').trim().toLowerCase()] || null; }
+    function fixBadge(row){
+      const t=retryTaskFor(row);
+      const b=document.createElement('span');
+      b.dataset.fix='1';
+      b.style.cssText='display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;';
+      if(!t){
+        b.textContent='+ แจ้งงาน'; b.title='ยังไม่มีงานแจ้งไว้ — กดเพื่อเพิ่มงานรอแก้ไขของหัวบ้านนี้';
+        b.style.background='#fff3bf'; b.style.color='#5c4400'; b.style.border='1px solid #ffe066';
+      } else if(!t.done_at){
+        b.textContent='ยังไม่ได้แก้ไข'; b.title=(t.note||'')+' — กดเมื่อแก้เสร็จแล้ว';
+        b.style.background='#ffe3e3'; b.style.color='#c92a2a'; b.style.border='1px solid #ff8787';
+      } else {
+        b.textContent='แก้ไขแล้ว'; b.title=(t.note||'')+' — กดเพื่อย้ายกลับไปเป็นงานค้าง';
+        b.style.background='#d8f3df'; b.style.color='#2f9e44'; b.style.border='1px solid #69db7c';
+      }
+      return b;
+    }
+    // โหลดงานทั้งหมดมาทำดัชนีตามอีเมล (แถวหลังทับแถวก่อน = ได้งานล่าสุดของแต่ละอีเมล)
+    async function loadRetryIndex(){
+      const { data, error } = await sb.from('retry_cases').select('id,email,note,due_date,done_at').order('id',{ascending:true});
+      if(error) return;
+      retryByEmail={};
+      (data||[]).forEach(r=>{ const k=String(r.email||'').trim().toLowerCase(); if(k) retryByEmail[k]=r; });
+    }
+    async function toggleFixStatus(row){
+      if(!canEdit()){ showPopup('ไม่มีสิทธิ์','บัญชีนี้ดูข้อมูลเท่านั้น','error'); return; }
+      const t=retryTaskFor(row);
+      if(!t){   // ยังไม่มีงาน → เปิดหน้างานรอแก้ไข ใส่อีเมลให้พร้อม
+        openRetryModal();
+        document.getElementById('rcEmail').value=row.email||'';
+        document.getElementById('rcNote').focus({preventScroll:true});
+        return;
+      }
+      let payload;
+      if(!t.done_at){
+        if(!confirm('งาน "'+(t.note||'-')+'"\nของ '+(row.email||'')+'\n\nแก้เสร็จแล้วใช่ไหม?')) return;
+        payload={ done_at:new Date().toISOString(), done_by:currentUser.username };
+      } else {
+        if(!confirm('ย้ายงาน "'+(t.note||'-')+'" กลับไปเป็นงานที่ยังไม่แก้ไข?')) return;
+        payload={ done_at:null, done_by:null };
+      }
+      const { error }=await sb.from('retry_cases').update(payload).eq('id',t.id);
+      if(error){ showPopup('บันทึกไม่สำเร็จ', error.message, 'error'); return; }
+      await loadRetryIndex();
+      updateRetryBadge();
+      if(!refreshRowDom(row)) applySearch();
+      setStatus(payload.done_at ? 'ทำเครื่องหมายว่าแก้ไขแล้ว: '+(row.email||'') : 'ย้ายกลับเป็นงานค้าง: '+(row.email||''));
     }
 
     // แถวช่องว่าง (spacer) ต้อง override กฎ td เดิม (height/max-height:42px) ไม่งั้นสูงผิด
@@ -1419,7 +1496,7 @@
       const resolve=(target)=>{
         const td=target.closest('td'); if(!td) return null;
         const tr=td.closest('tr'); if(!tr||!tr._row) return null;
-        const key=td.dataset.fkey; if(!key) return null;
+        const key=td.dataset.fkey; if(!key || key==='__fix') return null;   // __fix ไม่ใช่คอลัมน์ใน DB
         const f=DISPLAY_FIELDS.find(x=>x.key===key); if(!f) return null;
         return { row:tr._row, key, f };
       };
@@ -1434,6 +1511,8 @@
         showCtxMenu(e, r.row[r.key]||'', r.row, r.f);
       });
       tbody.addEventListener('click', e=>{
+        const fx=e.target.closest('[data-fix]');
+        if(fx){ const tr=fx.closest('tr'); if(tr&&tr._row) toggleFixStatus(tr._row); return; }
         const btn=e.target.closest('button[data-edit]');
         if(btn){ const tr=btn.closest('tr'); if(tr&&tr._row) openEditModal(tr._row); return; }
         const tr=e.target.closest('tr');
@@ -1912,6 +1991,9 @@
       const { data, error } = await q.order('due_date',{ascending:true}).order('id',{ascending:true});
       if(error){ showRetryAlert('โหลดไม่สำเร็จ: '+error.message+'\n(ถ้าเพิ่งใช้ครั้งแรก ให้รัน SQL สร้าง/อัปเดตตาราง retry_cases ก่อน — ดูคอมเมนต์เหนือฟังก์ชันนี้ในโค้ด)'); return; }
       retryRows=data||[]; renderRetryTable(); updateRetryBadge();
+      // งานเปลี่ยน → อัปเดตดัชนี แล้ววาดคอลัมน์ "การแก้ไข" ในตารางหลักใหม่
+      await loadRetryIndex();
+      if(accountsRows.length && !isRoomPage) applySearch();
     }
     // แถวว่าง (ใช้ตอนไม่มีงานในวันนั้น)
     function retryEmptyRow(tbody, cols, text){
