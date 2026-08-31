@@ -593,9 +593,9 @@
     const LOGIN_DOMAIN = 'duck.com';
 
     // คอลัมน์ที่ดึงจาก DB (ระบุชัด ไม่ใช้ * เพื่อลด egress)
-    const COLS = 'id,email,pass,use1,use2,use3,use4,use5,machine,contact,expire_date,status,credit,fill_date,apple_email,apple_pass,mail_birth,ios_verify,phone_owner,note,credit_deducted_for,updated_at';
+    const COLS = 'id,email,pass,use1,use2,use3,use4,use5,machine,contact,expire_date,status,credit,fill_date,apple_email,apple_pass,mail_birth,ios_verify,phone_owner,note,credit_deducted_for,fix_done_at,updated_at';
     // cache key — เปลี่ยนเลขเวอร์ชันเมื่อ schema เปลี่ยน
-    const CACHE_KEY = 'duck_v2';
+    const CACHE_KEY = 'duck_v3';
 
     const DROPDOWN_OPTIONS = { status: ['เติมโค้ดแล้ว', 'ยังไม่เติม', 'ติดต่อไม่ได้', 'ปิดย้าย', 'ไนจีเรีย'] };
     const STORE_OPTIONS = ['Duck', 'Indy'];   // ร้านสำหรับช่อง Use 1-5 (เพิ่มชื่อร้านได้ที่นี่)
@@ -1185,8 +1185,7 @@
     }
     function matchFixFilter(row){
       if(!fixFilter) return true;
-      const t=retryTaskFor(row);
-      return fixFilter==='pending' ? !!(t && !t.done_at) : !!(t && t.done_at);
+      return fixState(row)===fixFilter;
     }
 
     function applySearch(){
@@ -1330,22 +1329,42 @@
 
     // ===== คอลัมน์ "การแก้ไข" — ผูกกับงานรอแก้ไข (retry_cases) =====
     function retryTaskFor(row){ return retryByEmail[String(row.email||'').trim().toLowerCase()] || null; }
-    function fixBadge(row){
+    // สถานะการแก้ไขของหัวบ้าน 1 แถว
+    //   pending = มีงานค้าง | done = แก้เสร็จแล้ว | none = ยังไม่เคยแจ้งงาน
+    // accounts.fix_done_at เก็บไว้ที่ตัวหัวบ้าน → ลบงานที่เสร็จแล้วทิ้ง สถานะยังขึ้น "แก้ไขแล้ว" เหมือนเดิม
+    // ส่วนงานใหม่ที่เพิ่มเข้ามาจะล้างค่านี้ → สถานะกลับไปตามงานใหม่ทันที
+    function fixState(row){
       const t=retryTaskFor(row);
+      if(t && !t.done_at) return 'pending';
+      if((t && t.done_at) || row.fix_done_at) return 'done';
+      return 'none';
+    }
+    function fixBadge(row){
+      const st=fixState(row), t=retryTaskFor(row);
       const b=document.createElement('span');
       b.dataset.fix='1';
       b.style.cssText='display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;';
-      if(!t){
+      if(st==='none'){
         b.textContent='+ แจ้งงาน'; b.title='ยังไม่มีงานแจ้งไว้ — กดเพื่อเพิ่มงานรอแก้ไขของหัวบ้านนี้';
         b.style.background='#fff3bf'; b.style.color='#5c4400'; b.style.border='1px solid #ffe066';
-      } else if(!t.done_at){
+      } else if(st==='pending'){
         b.textContent='ยังไม่ได้แก้ไข'; b.title=(t.note||'')+' — กดเมื่อแก้เสร็จแล้ว';
         b.style.background='#ffe3e3'; b.style.color='#c92a2a'; b.style.border='1px solid #ff8787';
       } else {
-        b.textContent='แก้ไขแล้ว'; b.title=(t.note||'')+' — กดเพื่อย้ายกลับไปเป็นงานค้าง';
+        b.textContent='แก้ไขแล้ว';
+        b.title=(t ? (t.note||'')+' — ' : '')+'กดเพื่อกลับไปเป็นยังไม่ได้แก้ไข';
         b.style.background='#d8f3df'; b.style.color='#2f9e44'; b.style.border='1px solid #69db7c';
       }
       return b;
+    }
+    // เขียนสถานะ "แก้ไขแล้ว" ลงตัวหัวบ้าน (ทุกแถวที่อีเมลตรงกัน) — doneAt=null คือกลับเป็นยังไม่แก้
+    async function setAccountFixDone(email, doneAt){
+      const key=String(email||'').trim().toLowerCase();
+      if(!key) return;
+      const { error } = await sb.from('accounts').update({ fix_done_at: doneAt }).ilike('email', key);
+      if(error){ setStatus('อัปเดตสถานะการแก้ไขไม่สำเร็จ: '+error.message); return; }
+      accountsRows.forEach(r=>{ if(String(r.email||'').trim().toLowerCase()===key){ r.fix_done_at=doneAt; markSaved(r.id); } });
+      saveCache(getMaxUpdatedAt());
     }
     // โหลดงานทั้งหมดมาทำดัชนีตามอีเมล (แถวหลังทับแถวก่อน = ได้งานล่าสุดของแต่ละอีเมล)
     async function loadRetryIndex(){
@@ -1356,27 +1375,29 @@
     }
     async function toggleFixStatus(row){
       if(!canEdit()){ showPopup('ไม่มีสิทธิ์','บัญชีนี้ดูข้อมูลเท่านั้น','error'); return; }
-      const t=retryTaskFor(row);
-      if(!t){   // ยังไม่มีงาน → เปิดหน้างานรอแก้ไข ใส่อีเมลให้พร้อม
+      const st=fixState(row), t=retryTaskFor(row);
+      if(st==='none'){   // ยังไม่มีงาน → เปิดหน้างานรอแก้ไข ใส่อีเมลให้พร้อม
         openRetryModal();
         document.getElementById('rcEmail').value=row.email||'';
         document.getElementById('rcNote').focus({preventScroll:true});
         return;
       }
-      let payload;
-      if(!t.done_at){
-        if(!confirm('งาน "'+(t.note||'-')+'"\nของ '+(row.email||'')+'\n\nแก้เสร็จแล้วใช่ไหม?')) return;
-        payload={ done_at:new Date().toISOString(), done_by:currentUser.username };
-      } else {
-        if(!confirm('ย้ายงาน "'+(t.note||'-')+'" กลับไปเป็นงานที่ยังไม่แก้ไข?')) return;
-        payload={ done_at:null, done_by:null };
+      const markDone = (st==='pending');
+      const label = t ? '"'+(t.note||'-')+'"' : 'ของ '+(row.email||'');
+      if(!confirm(markDone ? ('งาน '+label+'\nของ '+(row.email||'')+'\n\nแก้เสร็จแล้วใช่ไหม?')
+                           : ('ย้ายงาน '+label+' กลับไปเป็นยังไม่ได้แก้ไข?'))) return;
+      const doneAt = markDone ? new Date().toISOString() : null;
+      // มีงานอยู่ก็อัปเดตงานด้วย (งานถูกลบไปแล้วก็ข้าม เหลือแค่สถานะที่ตัวหัวบ้าน)
+      if(t){
+        const { error }=await sb.from('retry_cases')
+          .update({ done_at:doneAt, done_by:markDone?currentUser.username:null }).eq('id',t.id);
+        if(error){ showPopup('บันทึกไม่สำเร็จ', error.message, 'error'); return; }
       }
-      const { error }=await sb.from('retry_cases').update(payload).eq('id',t.id);
-      if(error){ showPopup('บันทึกไม่สำเร็จ', error.message, 'error'); return; }
+      await setAccountFixDone(row.email, doneAt);
       await loadRetryIndex();
       updateRetryBadge();
       if(!refreshRowDom(row)) applySearch();
-      setStatus(payload.done_at ? 'ทำเครื่องหมายว่าแก้ไขแล้ว: '+(row.email||'') : 'ย้ายกลับเป็นงานค้าง: '+(row.email||''));
+      setStatus(markDone ? 'ทำเครื่องหมายว่าแก้ไขแล้ว: '+(row.email||'') : 'ย้ายกลับเป็นยังไม่ได้แก้ไข: '+(row.email||''));
     }
 
     // แถวช่องว่าง (spacer) ต้อง override กฎ td เดิม (height/max-height:42px) ไม่งั้นสูงผิด
@@ -2078,6 +2099,8 @@
         email, note, due_date:new Date(due+'T00:00:00').toISOString(), created_by:currentUser.username });
       btn.disabled=false;
       if(error){ showRetryAlert('บันทึกไม่สำเร็จ: '+error.message); return; }
+      // งานใหม่ = ล้างสถานะ "แก้ไขแล้ว" เดิมของหัวบ้านนี้ทิ้ง สถานะจะได้ตามงานใหม่
+      await setAccountFixDone(email, null);
       document.getElementById('rcEmail').value=''; document.getElementById('rcNote').value='';
       document.getElementById('rcDay').value=due.slice(0,10);   // เด้งไปดูวันของงานที่เพิ่งเพิ่ม
       document.getElementById('rcDate').value=retryDefaultDate();
@@ -2086,9 +2109,11 @@
     // เสร็จแล้ว = ทำเครื่องหมาย ไม่ลบทิ้ง (จะได้ย้อนดูงานที่ทำไปแล้วในแต่ละวันได้)
     async function finishRetryCase(r){
       if(!confirm('งาน "'+(r.note||r.email)+'" แก้เรียบร้อยแล้ว?')) return;
+      const doneAt=new Date().toISOString();
       const { error }=await sb.from('retry_cases')
-        .update({ done_at:new Date().toISOString(), done_by:currentUser.username }).eq('id',r.id);
+        .update({ done_at:doneAt, done_by:currentUser.username }).eq('id',r.id);
       if(error){ showRetryAlert('บันทึกไม่สำเร็จ: '+error.message); return; }
+      await setAccountFixDone(r.email, doneAt);
       await loadRetryCases();
     }
     async function deleteRetryCase(r){
@@ -2100,6 +2125,7 @@
     async function reopenRetryCase(r){
       const { error }=await sb.from('retry_cases').update({ done_at:null, done_by:null }).eq('id',r.id);
       if(error){ showRetryAlert('ย้ายกลับไม่สำเร็จ: '+error.message); return; }
+      await setAccountFixDone(r.email, null);
       await loadRetryCases();
     }
 
