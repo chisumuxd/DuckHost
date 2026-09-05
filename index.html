@@ -429,6 +429,10 @@
       </div>
 
       <div class="card">
+        <div id="roomBackBar" style="display:none; margin-bottom:10px;">
+          <button class="btn-gray" onclick="roomBackToList()">◂ กลับรายชื่อหัวบ้าน</button>
+          <span id="roomBackLabel" style="margin-left:10px; font-weight:800; color:#2f6b3a;"></span>
+        </div>
         <div id="topScroll" style="overflow-x:auto; overflow-y:hidden; border:1px solid #b7b7b7; border-bottom:none; border-radius:6px 6px 0 0;"><div style="height:1px;"></div></div>
         <div class="table-wrap">
           <table><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table>
@@ -530,7 +534,8 @@
         <button class="rc-tag" onclick="rcSetNote('รอเข้าเช็ค')">รอเข้าเช็ค</button>
       </div>
       <div style="font-size:12px;color:#888;margin-top:8px;">
-        ระบบสรุป "งานที่ยังค้าง" ส่งเข้ากลุ่มไลน์ทุกวัน 8 โมงเช้า และ 5 โมงเย็น (งานที่กดเสร็จแล้วไม่ถูกส่ง) • งานที่ถึงกำหนดแล้วช่องวันที่ขึ้นสีแดง
+        ระบบสรุป "งานที่ยังค้าง" ส่งเข้ากลุ่มไลน์ทุกวัน 8 โมงเช้า และ 5 โมงเย็น (งานที่กดเสร็จแล้วไม่ถูกส่ง) • งานที่ถึงกำหนดแล้วช่องวันที่ขึ้นสีแดง<br>
+        งานที่แก้เสร็จแล้วเกิน 7 วัน ระบบลบออกให้อัตโนมัติ (สถานะ "แก้ไขแล้ว" ในตารางหลักยังอยู่เหมือนเดิม)
       </div>
 
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:2px dashed #ffe066;">
@@ -1286,6 +1291,7 @@
     }
     function buildVRow(row, idx){
       if(vCtx && vCtx.mode==='room') return buildRoomRow(row, idx);
+      if(vCtx && vCtx.mode==='roomGroup') return buildRoomGroupRow(row, idx);
       const { useTarget, editable } = vCtx;
       const tr=document.createElement('tr');
       tr._row = row;
@@ -2387,6 +2393,20 @@ const ROOM_FIELDS = [
   { key:'expire_date', header:'หมดอายุหัวบ้าน',  width:110, dateExpire:true },
 ];
 
+// คอลัมน์ของ "หน้ารายชื่อหัวบ้าน" (รวมห้องว่างของหัวบ้านเดียวกันเป็นแถวเดียว)
+const ROOM_GROUP_FIELDS = [
+  { key:'email',       header:'Email หัวบ้าน',   width:260 },
+  { key:'pass',        header:'Pass',            width:170 },
+  { key:'__count',     header:'ห้องว่าง',        width:90  },
+  { key:'machine',     header:'เครื่อง',          width:120 },
+  { key:'expire_date', header:'หมดอายุหัวบ้าน',  width:120, dateExpire:true },
+];
+
+// null = โชว์รายชื่อหัวบ้าน / มีค่า = เจาะดูห้องว่างของหัวบ้าน id นั้น
+let roomExpandId = null;
+function roomOpenHouse(id){ roomExpandId = id; renderRoomPage(); }
+function roomBackToList(){ roomExpandId = null; renderRoomPage(); }
+
 /// กวาดหาช่อง Use ที่ "ว่าง" — จากหัวบ้านที่ยังไม่หมดอายุเท่านั้น
 // ว่าง = ใส่คำว่า 'ว่าง' หรือ ไม่ได้ใส่อะไรเลย (ช่องเปล่า) → นับเหมือนกัน
 function collectEmptyRooms(){
@@ -2404,6 +2424,8 @@ function collectEmptyRooms(){
 
 function toggleRoomPage(){
   isRoomPage = !isRoomPage;
+  roomExpandId = null;   // เข้า/ออกหน้าห้องว่าง = เริ่มที่รายชื่อหัวบ้านเสมอ
+  const bb=document.getElementById('roomBackBar'); if(bb) bb.style.display='none';
   const btn = document.getElementById('roomPageBtn');
   const title = document.getElementById('pageTitle');
   const mSel=document.getElementById('roomMachineSel');
@@ -2451,11 +2473,38 @@ function renderRoomPage(){
   // เรียงตาม id หัวบ้าน → ช่อง
   rooms.sort((a,b)=> (a.row.id-b.row.id) || (USE_KEYS.indexOf(a.key)-USE_KEYS.indexOf(b.key)));
 
-  const filterSig = JSON.stringify([kw, mv]);
+  // เจาะดูหัวบ้านเดียว แต่ห้องหมดแล้ว (เพิ่งเบิกไปหมด) → เด้งกลับหน้ารายชื่อเอง
+  if(roomExpandId!=null && !rooms.some(it=>it.row.id===roomExpandId)) roomExpandId = null;
+
+  // รวมห้องว่างของหัวบ้านเดียวกันเป็นแถวเดียว (ใช้ตอนโชว์รายชื่อ)
+  const groups = [];
+  const gmap = new Map();
+  rooms.forEach(it=>{
+    let g = gmap.get(it.row.id);
+    if(!g){ g = { row: it.row, keys: [] }; gmap.set(it.row.id, g); groups.push(g); }
+    g.keys.push(it.key);
+  });
+
+  const expanded = (roomExpandId!=null);
+  const FIELDS = expanded ? ROOM_FIELDS : ROOM_GROUP_FIELDS;
+  const items  = expanded ? rooms.filter(it=>it.row.id===roomExpandId) : groups;
+
+  // แถบปุ่มย้อนกลับ โผล่เฉพาะตอนเจาะดูหัวบ้านเดียว
+  const backBar=document.getElementById('roomBackBar');
+  if(backBar){
+    backBar.style.display = expanded ? 'block' : 'none';
+    if(expanded){
+      const g = gmap.get(roomExpandId);
+      document.getElementById('roomBackLabel').textContent =
+        (g ? (g.row.email||('ID '+g.row.id))+' — ว่าง '+g.keys.length+' ห้อง' : '');
+    }
+  }
+
+  const filterSig = JSON.stringify([kw, mv, roomExpandId]);
   const resetScroll = (filterSig !== lastRoomFilterSig);
   lastRoomFilterSig = filterSig;
 
-  vRows = rooms; vLastStart = -1; vLastEnd = -1;
+  vRows = items; vLastStart = -1; vLastEnd = -1;
   const wrap = vGetWrap();
   const keepScroll = wrap ? wrap.scrollTop : 0;   // จำตำแหน่งสกรอลล์ตาราง ไว้คืนหลังวาดใหม่
   const winY = window.scrollY;   // กัน window เด้งขึ้นบนตอน tbody หดชั่วขณะ
@@ -2465,23 +2514,25 @@ function renderRoomPage(){
   const hr=document.createElement('tr');
   const thNo=document.createElement('th'); thNo.textContent='ลำดับ';
   thNo.style.width='50px'; thNo.style.minWidth='50px'; thNo.style.maxWidth='50px'; hr.appendChild(thNo);
-  ROOM_FIELDS.forEach(f=>{
+  FIELDS.forEach(f=>{
     const th=document.createElement('th'); th.textContent=f.header;
     th.style.width=f.width+'px'; th.style.minWidth=f.width+'px'; th.style.maxWidth=f.width+'px';
     hr.appendChild(th);
   });
   const thAct=document.createElement('th'); thAct.textContent='จัดการ';
-  thAct.style.width='110px'; thAct.style.minWidth='110px'; thAct.style.maxWidth='110px'; hr.appendChild(thAct);
+  thAct.style.width='130px'; thAct.style.minWidth='130px'; thAct.style.maxWidth='130px'; hr.appendChild(thAct);
   thead.appendChild(hr);
 
-  const totalW = 50 + 110 + ROOM_FIELDS.reduce((s,f)=>s+f.width,0);
+  const totalW = 50 + 130 + FIELDS.reduce((s,f)=>s+f.width,0);
   const tableEl = thead.parentElement;
   tableEl.style.width = totalW+'px'; tableEl.style.minWidth = totalW+'px';
 
-  setStatus('หน้าห้องว่าง: '+rooms.length+' ห้องว่าง (จากหัวบ้านที่ยังไม่หมดอายุ)');
-  if(rooms.length===0){ window.scrollTo(0,winY); return; }
+  setStatus(expanded
+    ? ('ห้องว่างของหัวบ้านนี้: '+items.length+' ห้อง')
+    : ('หน้าห้องว่าง: '+groups.length+' หัวบ้าน (รวม '+rooms.length+' ห้องว่าง)'));
+  if(items.length===0){ window.scrollTo(0,winY); return; }
 
-  vCtx = { mode:'room', colCount: ROOM_FIELDS.length + 2 };
+  vCtx = { mode: expanded ? 'room' : 'roomGroup', colCount: FIELDS.length + 2 };
   bindVScroll();
   renderWindow();
   // เปลี่ยนตัวกรอง = เริ่มที่บนสุด, วาดซ้ำจากซิงก์/realtime = คงตำแหน่งเดิม ไม่เด้ง
@@ -2540,6 +2591,36 @@ function showClaimResult(row, newValue){
 }
     
     
+// แถวรายชื่อหัวบ้าน — 1 แถว = 1 หัวบ้าน บอกว่าเหลือกี่ห้อง กดเข้าไปดูว่าว่างช่องไหน
+function buildRoomGroupRow(item, idx){
+  const { row, keys } = item;
+  const tr = document.createElement('tr'); tr._row = row;
+
+  const tdNo=document.createElement('td'); tdNo.textContent=idx+1;
+  tdNo.style.textAlign='center'; tdNo.style.color='#888'; tr.appendChild(tdNo);
+
+  ROOM_GROUP_FIELDS.forEach(f=>{
+    const td=document.createElement('td');
+    if(f.key==='__count'){
+      td.innerHTML='<b style="color:#2f9e44;">'+keys.length+'</b> ห้อง';
+      td.style.textAlign='center';
+    } else {
+      const value=row[f.key]||'';
+      td.textContent=value;
+      if(f.dateExpire){ const c=dateColor(value,false); if(c){ td.style.backgroundColor=c; td.classList.add('cellcolor'); } }
+    }
+    tr.appendChild(td);
+  });
+
+  const tdAct=document.createElement('td'); tdAct.className='actions';
+  const b=document.createElement('button'); b.className='btn-primary';
+  b.textContent='ดูห้องว่าง'; b.style.padding='5px 14px'; b.style.fontSize='13px';
+  b.onclick=()=>roomOpenHouse(row.id);
+  tdAct.appendChild(b);
+  tr.appendChild(tdAct);
+  return tr;
+}
+
   function buildRoomRow(item, idx){
   const { row, key, kicked } = item;
   const n = USE_KEYS.indexOf(key)+1;
