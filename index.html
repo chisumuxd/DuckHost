@@ -336,6 +336,7 @@
           <div class="topbar-actions">
             <button class="btn-yellow" onclick="openGiftCard()">🎁 เบิก gift card</button>
             <button class="btn-gray" onclick="openRetryModal()" style="position:relative;">🛠 งานรอแก้ไข<span id="retryBadge" style="display:none;position:absolute;top:-7px;right:-7px;background:#fa5252;color:#fff;border-radius:10px;min-width:20px;height:20px;padding:0 5px;font-size:12px;font-weight:800;line-height:20px;text-align:center;">0</span></button>
+            <button class="btn-gray" onclick="openBadUpiModal()">❌ UPI เสีย</button>
             <button id="manageUsersBtn" class="btn-gray" style="display:none;" onclick="openUserModal()">จัดการผู้ใช้</button>
             <button id="auditBtn" class="btn-gray" style="display:none;" onclick="openAuditModal()">ประวัติ</button>
             <button id="addBtn" class="btn-blue" onclick="openAddModal()">+ เพิ่มข้อมูล</button>
@@ -577,6 +578,39 @@
     </div>
   </div>
 
+  <div id="badUpiModalBackdrop" class="modal-backdrop">
+    <div class="modal" style="width:min(96vw,900px); max-width:none;">
+      <div class="modal-header">
+        <div class="modal-title">❌ UPI เสีย</div>
+        <button class="btn-red" onclick="closeBadUpiModal()">ปิด</button>
+      </div>
+      <div id="badUpiAlert" class="modal-alert"></div>
+      <div class="form-grid" style="grid-template-columns:2fr 2fr 2fr auto; align-items:end;">
+        <div class="form-group"><label>UPI ที่เสีย</label><input id="buUpi" type="text" placeholder="วางเลข UPI" onkeydown="if(event.key==='Enter')saveBadUpi()"></div>
+        <div class="form-group"><label>หัวบ้าน <span style="color:#888;font-weight:400;">(ไม่ใส่ก็ได้)</span></label><input id="buEmail" type="text" placeholder="เช่น customer@gmail.com" onkeydown="if(event.key==='Enter')saveBadUpi()"></div>
+        <div class="form-group"><label>หมายเหตุ <span style="color:#888;font-weight:400;">(ไม่ใส่ก็ได้)</span></label><input id="buNote" type="text" placeholder="เช่น ใช้ไม่ได้ ขึ้น error" onkeydown="if(event.key==='Enter')saveBadUpi()"></div>
+        <div class="form-group"><button id="buSaveBtn" class="btn-primary" onclick="saveBadUpi()">เพิ่ม</button></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap;">
+        <input id="buSearch" class="search-input" type="text" placeholder="🔍 ค้นหา UPI / หัวบ้าน" style="min-width:220px;max-width:320px;" oninput="renderBadUpiTable()">
+        <button class="btn-gray" onclick="document.getElementById('buSearch').value='';renderBadUpiTable()">ล้าง</button>
+        <span style="font-size:12px;color:#888;">ระบบบันทึกคนแจ้งและวันเวลาให้อัตโนมัติ • UPI ซ้ำจะเตือนไม่ให้ใส่ซ้ำ</span>
+      </div>
+      <div class="table-wrap" style="margin-top:12px; max-height:55vh;">
+        <table style="width:100%; table-layout:fixed;">
+          <thead><tr>
+            <th style="width:26%;">UPI</th>
+            <th style="width:24%;">หัวบ้าน</th>
+            <th style="width:22%;">หมายเหตุ</th>
+            <th style="width:12%;">คนแจ้ง</th>
+            <th style="width:16%;">วันที่แจ้ง / จัดการ</th>
+          </tr></thead>
+          <tbody id="badUpiTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <div id="popupBackdrop" class="popup-backdrop">
     <div class="popup-box">
       <div id="popupIcon" class="popup-icon success">✓</div>
@@ -598,9 +632,9 @@
     const LOGIN_DOMAIN = 'duck.com';
 
     // คอลัมน์ที่ดึงจาก DB (ระบุชัด ไม่ใช้ * เพื่อลด egress)
-    const COLS = 'id,email,pass,use1,use2,use3,use4,use5,machine,contact,expire_date,status,credit,fill_date,apple_email,apple_pass,mail_birth,ios_verify,phone_owner,note,credit_deducted_for,fix_done_at,updated_at';
+    const COLS = 'id,email,pass,use1,use2,use3,use4,use5,machine,contact,expire_date,status,credit,fill_date,apple_email,apple_pass,mail_birth,ios_verify,phone_owner,upi,upi_by,upi_at,note,credit_deducted_for,fix_done_at,updated_at';
     // cache key — เปลี่ยนเลขเวอร์ชันเมื่อ schema เปลี่ยน
-    const CACHE_KEY = 'duck_v3';
+    const CACHE_KEY = 'duck_v4';
 
     const DROPDOWN_OPTIONS = { status: ['เติมโค้ดแล้ว', 'ยังไม่เติม', 'ติดต่อไม่ได้', 'ปิดย้าย', 'ไนจีเรีย'] };
     const STORE_OPTIONS = ['Duck', 'Indy'];   // ร้านสำหรับช่อง Use 1-5 (เพิ่มชื่อร้านได้ที่นี่)
@@ -647,6 +681,7 @@
       { key:'mail_birth', header:'วันเกิดเมล' },
       { key:'ios_verify', header:'เบอร์ยืนยัน IOS' },
       { key:'phone_owner', header:'เจ้าของเบอร์' },
+      { key:'upi', header:'UPI' },
       { key:'note', header:'หมายเหตุ' }
     ];
 
@@ -670,6 +705,9 @@
       { key:'mail_birth', header:'วันเกิดเมล', width:100},
       { key:'ios_verify', header:'เบอร์ยืนยัน IOS', width:120},
       { key:'phone_owner', header:'เจ้าของเบอร์', width:100},
+      { key:'upi', header:'UPI', width:150},
+      { key:'upi_by', header:'คนที่ใส่ UPI', width:110},
+      { key:'upi_at', header:'วันที่ใส่ UPI', width:100},
       { key:'note', header:'หมายเหตุ', width:200}
     ];
 
@@ -916,11 +954,11 @@
         const durRow=document.createElement('div'); durRow.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;';
         function addMonthsDur(d,n){ const day=d.getDate(); const nd=new Date(d.getFullYear(),d.getMonth()+n,1); const last=new Date(nd.getFullYear(),nd.getMonth()+1,0).getDate(); nd.setDate(Math.min(day,last)); return nd; }
         function fmtBE2(d){ return d.getDate()+'/'+(d.getMonth()+1)+'/'+String((d.getFullYear()+543)%100).padStart(2,'0'); }
-        [{t:'7 วัน',days:7},{t:'14 วัน',days:14},{t:'1 เดือน',mo:1},{t:'2 เดือน',mo:2},{t:'3 เดือน',mo:3},{t:'6 เดือน',mo:6},{t:'12 เดือน',mo:12}].forEach(o=>{
+        [{t:'วันนี้',days:0},{t:'7 วัน',days:7},{t:'14 วัน',days:14},{t:'1 เดือน',mo:1},{t:'2 เดือน',mo:2},{t:'3 เดือน',mo:3},{t:'6 เดือน',mo:6},{t:'12 เดือน',mo:12}].forEach(o=>{
           const b=document.createElement('button'); b.textContent=o.t;
           b.style.cssText='border:1px solid #40c057;background:#eefaf2;color:#0f5132;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;cursor:pointer;';
           b.onclick=()=>{ const now=new Date(); const base=new Date(now.getFullYear(),now.getMonth(),now.getDate());
-            const d = o.days ? new Date(base.getTime()+o.days*86400000) : addMonthsDur(base,o.mo);
+            const d = (o.days!=null) ? new Date(base.getTime()+o.days*86400000) : addMonthsDur(base,o.mo);
             dateInput.value=fmtBE2(d); dateInput.focus({preventScroll:true}); };
           durRow.appendChild(b);
         });
@@ -993,6 +1031,18 @@
     }
     function toggleDark(){ applyDark(!document.body.classList.contains('dark')); }
     (function(){ let v=null; try{ v=localStorage.getItem('duck_dark'); }catch(e){} applyDark(v==='1'); })();
+
+    // วันที่วันนี้แบบ ว/ด/พ.ศ.2หลัก (เช่น 5/9/69) — รูปแบบเดียวกับช่องวันที่อื่นในตาราง
+    function todayBE2(){ const d=new Date();
+      return d.getDate()+'/'+(d.getMonth()+1)+'/'+String((d.getFullYear()+543)%100).padStart(2,'0'); }
+    // ใส่/แก้ช่อง UPI = ระบบประทับ "คนที่ใส่" + "วันที่ใส่" ให้เอง (ล้าง UPI = ล้างทั้งสองช่อง)
+    function stampUpi(payload){
+      if(!('upi' in payload)) return payload;
+      const has = String(payload.upi||'').trim() !== '';
+      payload.upi_by = has ? (currentUser.name || currentUser.username) : '';
+      payload.upi_at = has ? todayBE2() : '';
+      return payload;
+    }
 
     function canEdit(){ return currentUser && (currentUser.role==='ADMIN' || currentUser.role==='EDITOR'); }
     function isAdmin(){ return currentUser && currentUser.role==='ADMIN'; }
@@ -1686,6 +1736,11 @@
           return;
         }
       }
+      // UPI เปลี่ยนค่า = ประทับคนใส่/วันที่ให้ใหม่ (ค่าเดิมไม่ถูกแตะถ้าไม่ได้แก้ UPI)
+      const oldUpi = currentMode==='edit'
+        ? String((accountsRows.find(r=>r.id===editingId)||{}).upi||'').trim() : '';
+      if(String(payload.upi||'').trim() !== oldUpi) stampUpi(payload); else delete payload.upi;
+
       const btn=document.getElementById('saveBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก...';
       let error;
       if(currentMode==='add'){
@@ -2141,6 +2196,88 @@
        → สรุปงานที่ยังไม่กดเสร็จ และถึงกำหนดแล้ว → ส่งเป็นข้อความเดียวเข้ากลุ่ม
        ตั้งค่า: supabase/functions/line-notify/index.ts + setup_line_cron.sql */
 
+    /* ===== หน้ารวม UPI เสีย (ตาราง bad_upi) =====
+       ครั้งแรกต้องรัน SQL นี้ใน Supabase → SQL Editor:
+
+       create table if not exists bad_upi (
+         id bigint generated always as identity primary key,
+         upi text not null,
+         email text default '',
+         note text default '',
+         created_by text default '',
+         created_at timestamptz default now()
+       );
+       alter table bad_upi enable row level security;
+       create policy "auth all bad_upi" on bad_upi
+         for all to authenticated using (true) with check (true);
+    */
+    let badUpiRows = [];
+    function showBadUpiAlert(m){ const el=document.getElementById('badUpiAlert'); el.textContent=m; el.className='modal-alert show'; }
+    function hideBadUpiAlert(){ const el=document.getElementById('badUpiAlert'); el.textContent=''; el.className='modal-alert'; }
+    function openBadUpiModal(){
+      hideBadUpiAlert();
+      document.getElementById('buSearch').value='';
+      document.getElementById('badUpiModalBackdrop').style.display='block';
+      loadBadUpi();
+    }
+    function closeBadUpiModal(){ document.getElementById('badUpiModalBackdrop').style.display='none'; }
+    async function loadBadUpi(){
+      const { data, error } = await sb.from('bad_upi').select('*').order('id',{ascending:false});
+      if(error){ showBadUpiAlert('โหลดไม่สำเร็จ: '+error.message+'\n(ถ้าเพิ่งใช้ครั้งแรก ให้รัน SQL สร้างตาราง bad_upi ก่อน — ดูคอมเมนต์เหนือฟังก์ชันนี้ในโค้ด)'); return; }
+      badUpiRows=data||[]; renderBadUpiTable();
+    }
+    function renderBadUpiTable(){
+      const tbody=document.getElementById('badUpiTableBody'); tbody.innerHTML='';
+      const kw=document.getElementById('buSearch').value.trim().toLowerCase();
+      const rows = kw
+        ? badUpiRows.filter(r=>(String(r.upi||'')+' '+String(r.email||'')+' '+String(r.note||'')).toLowerCase().includes(kw))
+        : badUpiRows;
+      if(rows.length===0){
+        const tr=document.createElement('tr'); const td=document.createElement('td');
+        td.colSpan=5; td.style.color='#888';
+        td.textContent = kw ? 'ไม่พบ UPI ที่ค้นหา' : 'ยังไม่มีรายการ UPI เสีย';
+        tr.appendChild(td); tbody.appendChild(tr); return;
+      }
+      rows.forEach(r=>{
+        const tr=document.createElement('tr');
+        [r.upi, r.email, r.note, userNameMap[r.created_by]||r.created_by||''].forEach(v=>{
+          const td=document.createElement('td'); td.textContent=v||''; tr.appendChild(td);
+        });
+        const tdAct=document.createElement('td'); tdAct.className='actions'; tdAct.style.textAlign='left';
+        tdAct.textContent=retryDueBE(r.created_at, true)+' ';
+        if(canEdit()){
+          const b=document.createElement('button'); b.className='btn-red'; b.textContent='🗑 ลบ';
+          b.style.padding='5px 10px'; b.style.fontSize='12px'; b.style.marginLeft='4px';
+          b.onclick=()=>deleteBadUpi(r);
+          tdAct.appendChild(b);
+        }
+        tr.appendChild(tdAct); tbody.appendChild(tr);
+      });
+    }
+    async function saveBadUpi(){
+      hideBadUpiAlert();
+      if(!canEdit()){ showBadUpiAlert('บัญชีนี้ดูข้อมูลเท่านั้น'); return; }
+      const upi=document.getElementById('buUpi').value.trim();
+      const email=document.getElementById('buEmail').value.trim();
+      const note=document.getElementById('buNote').value.trim();
+      if(!upi){ showBadUpiAlert('กรุณาใส่เลข UPI'); return; }
+      // กันใส่ซ้ำ (เทียบแบบไม่สนตัวพิมพ์เล็ก/ใหญ่)
+      const dup = badUpiRows.find(r=>String(r.upi||'').trim().toLowerCase()===upi.toLowerCase());
+      if(dup){ showBadUpiAlert('UPI นี้มีในรายการอยู่แล้ว'+(dup.email?' (หัวบ้าน '+dup.email+')':'')); return; }
+      const btn=document.getElementById('buSaveBtn'); btn.disabled=true;
+      const { error }=await sb.from('bad_upi').insert({ upi, email, note, created_by:currentUser.username });
+      btn.disabled=false;
+      if(error){ showBadUpiAlert('บันทึกไม่สำเร็จ: '+error.message); return; }
+      document.getElementById('buUpi').value=''; document.getElementById('buEmail').value=''; document.getElementById('buNote').value='';
+      await loadBadUpi();
+    }
+    async function deleteBadUpi(r){
+      if(!confirm('ลบ UPI "'+r.upi+'" ออกจากรายการ?')) return;
+      const { error }=await sb.from('bad_upi').delete().eq('id',r.id);
+      if(error){ showBadUpiAlert('ลบไม่สำเร็จ: '+error.message); return; }
+      await loadBadUpi();
+    }
+
     async function quickEditCell(row, key, header, oldValue){
       if(!canEdit()){ showPopup('ไม่มีสิทธิ์','บัญชีนี้ดูข้อมูลเท่านั้น','error'); return; }
       let newValue;
@@ -2185,6 +2322,7 @@
 
       const payload={}; payload[key]=newValue;
       if(renewCredit!==null) payload.credit=renewCredit;   // ต่ออายุ = หักเครดิตพร้อมกัน
+      stampUpi(payload);                                    // แก้ UPI = ประทับคนใส่/วันที่ให้อัตโนมัติ
       const oldRow = accountsRows.find(r=>r.id===row.id);
       const { error } = await sb.from('accounts').update(payload).eq('id', row.id);
       if(error){ showPopup('แก้ไขไม่สำเร็จ', error.message, 'error'); return; }
