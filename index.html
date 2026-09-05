@@ -336,6 +336,7 @@
           <div class="topbar-actions">
             <button class="btn-yellow" onclick="openGiftCard()">🎁 เบิก gift card</button>
             <button class="btn-gray" onclick="openRetryModal()" style="position:relative;">🛠 งานรอแก้ไข<span id="retryBadge" style="display:none;position:absolute;top:-7px;right:-7px;background:#fa5252;color:#fff;border-radius:10px;min-width:20px;height:20px;padding:0 5px;font-size:12px;font-weight:800;line-height:20px;text-align:center;">0</span></button>
+            <button class="btn-yellow" onclick="openUpiStockModal()">🔑 เบิก UPI</button>
             <button class="btn-gray" onclick="openBadUpiModal()">❌ UPI เสีย</button>
             <button id="manageUsersBtn" class="btn-gray" style="display:none;" onclick="openUserModal()">จัดการผู้ใช้</button>
             <button id="auditBtn" class="btn-gray" style="display:none;" onclick="openAuditModal()">ประวัติ</button>
@@ -573,6 +574,54 @@
             <th style="width:32%;">คนแก้ / จัดการ</th>
           </tr></thead>
           <tbody id="retryDoneBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="upiStockModalBackdrop" class="modal-backdrop">
+    <div class="modal" style="width:min(96vw,900px); max-width:none;">
+      <div class="modal-header">
+        <div class="modal-title">🔑 คลัง UPI</div>
+        <button class="btn-red" onclick="closeUpiStockModal()">ปิด</button>
+      </div>
+      <div id="upiStockAlert" class="modal-alert"></div>
+
+      <div style="padding:16px 14px;background:#f1faf4;border:2px solid #c3ebcf;border-radius:14px;text-align:center;">
+        <div style="font-size:12px;font-weight:700;color:#2f6b3a;">คงเหลือในคลัง</div>
+        <div id="upiRemaining" style="font-size:34px;font-weight:800;color:#2f9e44;line-height:1.1;">-</div>
+        <button id="upiRedeemBtn" class="btn-primary" style="margin-top:12px;padding:12px 30px;font-size:16px;" onclick="redeemUpi()">🎁 เบิก UPI 1 อัน</button>
+        <div style="font-size:12px;color:#7a8a7e;margin-top:8px;">ระบบจะจ่ายทีละอัน พร้อมบันทึกชื่อคนเบิกและเวลาให้อัตโนมัติ</div>
+      </div>
+
+      <div id="upiAdminBox" style="display:none;margin-top:14px;padding-top:14px;border-top:2px dashed #ffe066;">
+        <div style="font-size:14px;font-weight:800;color:#2f6b3a;margin-bottom:8px;">📦 เติม UPI เข้าคลัง (เฉพาะแอดมิน)</div>
+        <div class="form-group">
+          <label>วาง UPI ได้หลายอัน (ขึ้นบรรทัดใหม่ หรือคั่นด้วยเว้นวรรค/ลูกน้ำ)</label>
+          <textarea id="upiRaw" rows="4" placeholder="UPI111111&#10;UPI222222&#10;UPI333333"></textarea>
+        </div>
+        <div class="form-grid" style="grid-template-columns:3fr auto; align-items:end; margin-top:8px;">
+          <div class="form-group"><label>หมายเหตุ (ไม่บังคับ)</label><input id="upiNote" type="text" placeholder="เช่น ล็อตวันที่ 5/9/69"></div>
+          <div class="form-group"><button id="upiAddBtn" class="btn-blue" onclick="addUpiStock()">เติมเข้าคลัง</button></div>
+        </div>
+      </div>
+
+      <div style="font-size:14px;font-weight:800;color:#2f9e44;margin:16px 0 6px;">🧾 ประวัติการเบิก (<span id="upiHistCount">0</span>)</div>
+      <div class="form-grid" style="grid-template-columns:repeat(3,1fr) auto; align-items:end; margin-bottom:10px;">
+        <div class="form-group"><label>คนเบิก</label><select id="upiFilterUser" onchange="loadUpiStock()"></select></div>
+        <div class="form-group"><label>เลือกวัน</label><input id="upiFilterDate" type="date" onchange="upiPickDate()"></div>
+        <div class="form-group"><label>เลือกเดือน</label><input id="upiFilterMonth" type="month" onchange="upiPickMonth()"></div>
+        <div class="form-group"><button class="btn-gray" onclick="upiClearFilter()">ล้างตัวกรอง</button></div>
+      </div>
+      <div class="table-wrap" style="max-height:45vh;">
+        <table style="width:100%; table-layout:fixed;">
+          <thead><tr>
+            <th style="width:34%;">UPI ที่เบิก</th>
+            <th style="width:20%;">คนเบิก</th>
+            <th style="width:22%;">เวลาเบิก</th>
+            <th style="width:24%;">หมายเหตุล็อต</th>
+          </tr></thead>
+          <tbody id="upiHistBody"></tbody>
         </table>
       </div>
     </div>
@@ -2195,6 +2244,158 @@
        pg_cron เรียก Edge Function 'line-notify' วันละ 2 รอบ (8 โมงเช้า / 5 โมงเย็น เวลาไทย)
        → สรุปงานที่ยังไม่กดเสร็จ และถึงกำหนดแล้ว → ส่งเป็นข้อความเดียวเข้ากลุ่ม
        ตั้งค่า: supabase/functions/line-notify/index.ts + setup_line_cron.sql */
+
+    /* ===== คลัง UPI (ตาราง upi_stock) — แอดมินเติม / ทุกคนกดเบิก =====
+       ครั้งแรกต้องรัน SQL ในไฟล์ add_upi_stock_table.sql */
+    let upiHistRows = [];
+    function showUpiAlert(m){ const el=document.getElementById('upiStockAlert'); el.textContent=m; el.className='modal-alert show'; }
+    function hideUpiAlert(){ const el=document.getElementById('upiStockAlert'); el.textContent=''; el.className='modal-alert'; }
+    function openUpiStockModal(){
+      hideUpiAlert();
+      document.getElementById('upiAdminBox').style.display = isAdmin() ? 'block' : 'none';
+      document.getElementById('upiRedeemBtn').style.display = canEdit() ? 'inline-block' : 'none';
+      // ตัวเลือกคนเบิก — จากรายชื่อผู้ใช้ทั้งหมด
+      const sel=document.getElementById('upiFilterUser');
+      sel.innerHTML='<option value="">ทุกคน</option>'
+        + Object.keys(userNameMap).sort().map(u=>'<option value="'+escapeHtml(u)+'">'+escapeHtml(userNameMap[u]||u)+'</option>').join('');
+      // เปิดมาเริ่มที่เดือนปัจจุบัน (ไม่ดึงทั้งหมด)
+      document.getElementById('upiFilterDate').value='';
+      document.getElementById('upiFilterMonth').value = toDateTimeInput(new Date()).slice(0,7);
+      document.getElementById('upiStockModalBackdrop').style.display='block';
+      loadUpiStock();
+    }
+    function closeUpiStockModal(){ document.getElementById('upiStockModalBackdrop').style.display='none'; }
+    // เลือกวัน = ล้างเดือน / เลือกเดือน = ล้างวัน (กันงงว่าอันไหนมีผล)
+    function upiPickDate(){ if(document.getElementById('upiFilterDate').value) document.getElementById('upiFilterMonth').value=''; loadUpiStock(); }
+    function upiPickMonth(){ if(document.getElementById('upiFilterMonth').value) document.getElementById('upiFilterDate').value=''; loadUpiStock(); }
+    function upiClearFilter(){
+      document.getElementById('upiFilterUser').value='';
+      document.getElementById('upiFilterDate').value='';
+      document.getElementById('upiFilterMonth').value='';
+      loadUpiStock();
+    }
+
+    async function loadUpiStock(){
+      const { count, error:cErr } = await sb.from('upi_stock')
+        .select('id',{ count:'exact', head:true }).eq('status','AVAILABLE');
+      if(cErr){ showUpiAlert('โหลดไม่สำเร็จ: '+cErr.message+'\n(ถ้าเพิ่งใช้ครั้งแรก ให้รัน SQL สร้างตาราง upi_stock ก่อน — ไฟล์ add_upi_stock_table.sql)'); return; }
+      document.getElementById('upiRemaining').textContent = (count||0).toLocaleString();
+
+      const who   = document.getElementById('upiFilterUser').value;
+      const day   = document.getElementById('upiFilterDate').value;
+      const month = document.getElementById('upiFilterMonth').value;
+
+      let q = sb.from('upi_stock').select('*').eq('status','USED');
+      if(who) q = q.eq('redeemed_by', who);
+      if(day){
+        const p=day.split('-'); const s=new Date(+p[0],+p[1]-1,+p[2]); const e=new Date(s); e.setDate(e.getDate()+1);
+        q = q.gte('redeemed_at', s.toISOString()).lt('redeemed_at', e.toISOString());
+      } else if(month){
+        const p=month.split('-'); const s=new Date(+p[0],+p[1]-1,1); const e=new Date(+p[0],+p[1],1);
+        q = q.gte('redeemed_at', s.toISOString()).lt('redeemed_at', e.toISOString());
+      }
+      const { data, error } = await q.order('redeemed_at',{ascending:false}).limit(200);
+      if(error){ showUpiAlert('โหลดประวัติไม่สำเร็จ: '+error.message); return; }
+      upiHistRows = data||[];
+      renderUpiHist();
+    }
+    function renderUpiHist(){
+      const tbody=document.getElementById('upiHistBody'); tbody.innerHTML='';
+      document.getElementById('upiHistCount').textContent = upiHistRows.length;
+      if(upiHistRows.length===0){
+        const tr=document.createElement('tr'); const td=document.createElement('td');
+        td.colSpan=4; td.style.color='#888';
+        td.textContent='ไม่พบการเบิกตามตัวกรองที่เลือก (กด "ล้างตัวกรอง" เพื่อดูทั้งหมด)';
+        tr.appendChild(td); tbody.appendChild(tr); return;
+      }
+      upiHistRows.forEach(r=>{
+        const tr=document.createElement('tr');
+        [r.code, userNameMap[r.redeemed_by]||r.redeemed_by||'', retryDueBE(r.redeemed_at, true), r.note||''].forEach(v=>{
+          const td=document.createElement('td'); td.textContent=v||''; tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    }
+
+    // เบิก 1 อัน — จองด้วย update แบบมีเงื่อนไข (status ยังเป็น AVAILABLE เท่านั้นถึงจะติด)
+    // กดพร้อมกันหลายเครื่องจะได้คนละอันเสมอ ถ้าชนกันก็วนหยิบอันถัดไป
+    async function redeemUpi(){
+      if(!canEdit()){ showUpiAlert('บัญชีนี้ดูข้อมูลเท่านั้น'); return; }
+      hideUpiAlert();
+      const btn=document.getElementById('upiRedeemBtn'); btn.disabled=true; btn.textContent='กำลังเบิก...';
+      try{
+        for(let attempt=0; attempt<6; attempt++){
+          const { data:avail, error } = await sb.from('upi_stock').select('id,code,note')
+            .eq('status','AVAILABLE').order('id',{ascending:true}).limit(1);
+          if(error){ showUpiAlert('เบิกไม่สำเร็จ: '+error.message); return; }
+          if(!avail || !avail.length){ showUpiAlert('ไม่มี UPI เหลือในคลังแล้ว — แจ้งแอดมินให้เติมก่อน'); return; }
+
+          const pick = avail[0];
+          const { data:won, error:uErr } = await sb.from('upi_stock')
+            .update({ status:'USED', redeemed_by:currentUser.username, redeemed_at:new Date().toISOString() })
+            .eq('id', pick.id).eq('status','AVAILABLE').select('code,note');
+          if(uErr){ showUpiAlert('เบิกไม่สำเร็จ: '+uErr.message); return; }
+          if(won && won.length){ showUpiResult(won[0].code); await loadUpiStock(); return; }
+          // ชนกับคนอื่น → วนหยิบอันถัดไป
+        }
+        showUpiAlert('คนเบิกพร้อมกันหลายคน ลองกดใหม่อีกครั้ง');
+      } finally {
+        btn.disabled=false; btn.textContent='🎁 เบิก UPI 1 อัน';
+      }
+    }
+
+    // popup โชว์ UPI ที่เบิกได้ + ปุ่มคัดลอก
+    function showUpiResult(code){
+      const html = '<div style="text-align:left;">'
+        + '<div style="background:#f1faf4;border:1px solid #c3ebcf;border-radius:10px;padding:14px;'
+        +      'font-size:18px;font-weight:800;color:#2b3a2e;word-break:break-all;text-align:center;">'
+        +   escapeHtml(code)
+        + '</div>'
+        + '<button class="btn-yellow upi-copy" style="margin-top:12px;width:100%;padding:10px;">📋 คัดลอก</button>'
+        + '</div>';
+      document.getElementById('popupIcon').className='popup-icon success';
+      document.getElementById('popupIcon').textContent='✓';
+      document.getElementById('popupTitle').textContent='เบิก UPI สำเร็จ';
+      document.getElementById('popupMsg').innerHTML = html;
+      document.getElementById('popupMsg').style.whiteSpace='normal';
+      popupCb = null;
+      document.getElementById('popupBackdrop').style.display='block';
+      const btn=document.querySelector('#popupMsg .upi-copy');
+      if(btn){
+        btn.onclick = async ()=>{
+          try { await navigator.clipboard.writeText(code); }
+          catch(e){
+            const ta=document.createElement('textarea'); ta.value=code;
+            document.body.appendChild(ta); ta.select();
+            document.execCommand('copy'); document.body.removeChild(ta);
+          }
+          const old=btn.textContent; btn.textContent='✓ คัดลอกแล้ว';
+          setTimeout(()=>{ btn.textContent=old; }, 1200);
+        };
+      }
+    }
+
+    async function addUpiStock(){
+      hideUpiAlert();
+      if(!isAdmin()){ showUpiAlert('เฉพาะแอดมินเท่านั้นที่เติม UPI เข้าคลังได้'); return; }
+      const raw=document.getElementById('upiRaw').value;
+      const note=document.getElementById('upiNote').value.trim();
+      // แยกด้วยบรรทัด/เว้นวรรค/ลูกน้ำ แล้วตัดที่ซ้ำกันเองในข้อความ
+      const codes=[...new Set(String(raw||'').split(/[\s,;|]+/).map(s=>s.trim()).filter(Boolean))];
+      if(!codes.length){ showUpiAlert('กรุณาวาง UPI ที่ต้องการเติม'); return; }
+      const btn=document.getElementById('upiAddBtn'); btn.disabled=true; btn.textContent='กำลังเติม...';
+      // upsert + ignoreDuplicates = โค้ดที่มีอยู่แล้วในคลังถูกข้าม ไม่พังทั้งชุด
+      const { data, error }=await sb.from('upi_stock')
+        .upsert(codes.map(c=>({ code:c, note, added_by:currentUser.username })),
+                { onConflict:'code', ignoreDuplicates:true })
+        .select('id');
+      btn.disabled=false; btn.textContent='เติมเข้าคลัง';
+      if(error){ showUpiAlert('เติมไม่สำเร็จ: '+error.message); return; }
+      const added=(data||[]).length, dup=codes.length-added;
+      document.getElementById('upiRaw').value='';
+      await loadUpiStock();
+      showUpiAlert('เติมเข้าคลังแล้ว '+added+' อัน'+(dup>0 ? ' (ข้ามที่ซ้ำกับในคลัง '+dup+' อัน)' : ''));
+    }
 
     /* ===== หน้ารวม UPI เสีย (ตาราง bad_upi) =====
        ครั้งแรกต้องรัน SQL นี้ใน Supabase → SQL Editor:
