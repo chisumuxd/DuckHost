@@ -209,6 +209,21 @@
     #retryDoneBody td.actions{ overflow:visible; text-overflow:clip; }
     body.dark .rc-tag{ background:#1e2a22; border-color:#2f5138; color:#8ce99a; }
 
+    /* ===== เมนู UPI (popup เล็กใต้ปุ่ม) ===== */
+    #upiMenu{
+      display:none; position:fixed; z-index:9997;
+      background:#fff; border:2px solid #d7eede; border-radius:14px;
+      box-shadow:0 10px 28px rgba(40,80,50,0.22); padding:6px; min-width:215px;
+    }
+    .upi-menu-item{
+      padding:11px 14px; border-radius:10px; cursor:pointer;
+      font-size:14px; font-weight:700; color:#2b3a2e; white-space:nowrap;
+    }
+    .upi-menu-item:hover{ background:#e8f7ec; }
+    body.dark #upiMenu{ background:#20262c; border-color:#2c333a; }
+    body.dark .upi-menu-item{ color:#dfe6ea; }
+    body.dark .upi-menu-item:hover{ background:#283039; }
+
     /* ===== POPUP ===== */
     .popup-backdrop{
       display:none; position:fixed; inset:0;
@@ -336,8 +351,7 @@
           <div class="topbar-actions">
             <button class="btn-yellow" onclick="openGiftCard()">🎁 เบิก gift card</button>
             <button class="btn-gray" onclick="openRetryModal()" style="position:relative;">🛠 งานรอแก้ไข<span id="retryBadge" style="display:none;position:absolute;top:-7px;right:-7px;background:#fa5252;color:#fff;border-radius:10px;min-width:20px;height:20px;padding:0 5px;font-size:12px;font-weight:800;line-height:20px;text-align:center;">0</span></button>
-            <button class="btn-yellow" onclick="openUpiStockModal()">🔑 เบิก UPI</button>
-            <button class="btn-gray" onclick="openBadUpiModal()">❌ UPI เสีย</button>
+            <button class="btn-yellow" data-upimenu="1" onclick="openUpiMenu(event)">🔑 UPI</button>
             <button id="manageUsersBtn" class="btn-gray" style="display:none;" onclick="openUserModal()">จัดการผู้ใช้</button>
             <button id="auditBtn" class="btn-gray" style="display:none;" onclick="openAuditModal()">ประวัติ</button>
             <button id="addBtn" class="btn-blue" onclick="openAddModal()">+ เพิ่มข้อมูล</button>
@@ -574,6 +588,43 @@
             <th style="width:32%;">คนแก้ / จัดการ</th>
           </tr></thead>
           <tbody id="retryDoneBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="upiMenu">
+    <div class="upi-menu-item" onclick="closeUpiMenu();openUpiStockModal()">🎁 เบิก UPI จากคลัง</div>
+    <div class="upi-menu-item" onclick="closeUpiMenu();openUpiCheckModal()">🔎 เช็ค UPI ↔ หัวบ้าน</div>
+    <div class="upi-menu-item" onclick="closeUpiMenu();openBadUpiModal()">❌ รายการ UPI เสีย</div>
+  </div>
+
+  <div id="upiCheckModalBackdrop" class="modal-backdrop">
+    <div class="modal" style="width:min(96vw,980px); max-width:none;">
+      <div class="modal-header">
+        <div class="modal-title">🔎 เช็ค UPI ↔ หัวบ้าน</div>
+        <button class="btn-red" onclick="closeUpiCheckModal()">ปิด</button>
+      </div>
+      <div id="upiCheckFilterBar">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <input id="upiCheckSearch" class="search-input" type="text" placeholder="🔍 พิมพ์ UPI หรืออีเมลหัวบ้าน" style="min-width:260px;" oninput="renderUpiCheck()">
+          <button class="btn-gray" onclick="document.getElementById('upiCheckSearch').value='';renderUpiCheck()">ล้าง</button>
+          <label class="chk-label"><input id="upiCheckDupOnly" type="checkbox" onchange="renderUpiCheck()">เฉพาะที่ซ้ำ/เสีย</label>
+        </div>
+        <div style="font-size:12px;color:#888;margin-top:8px;">
+          1 บรรทัด = 1 UPI (เฉพาะตัวที่ถูกใส่ไว้ที่หัวบ้านแล้ว — ตัวที่ยังอยู่ในคลังไม่ถูกนำมาแสดง)<br>
+          กดที่ป้าย <b>จำนวนอีเมล</b> เพื่อดูว่าใส่ไว้ที่อีเมลไหนบ้าง • <b style="color:#c92a2a;">แดง</b> = ผูกหลายอีเมล (ผิดปกติ) • ป้าย <b style="color:#5c4400;">เสีย</b> = อยู่ในรายการ UPI เสีย
+        </div>
+      </div>
+      <div id="upiCheckBackBar" style="display:none;margin-top:4px;">
+        <button class="btn-gray" onclick="upiCheckBack()">◂ กลับรายการ UPI</button>
+        <span id="upiCheckDetailLabel" style="margin-left:10px;font-weight:800;color:#2f6b3a;word-break:break-all;"></span>
+      </div>
+      <div style="font-size:14px;font-weight:800;color:#2f9e44;margin:12px 0 6px;">พบ <span id="upiCheckCount">0</span> รายการ</div>
+      <div class="table-wrap" style="max-height:60vh;">
+        <table style="width:100%; table-layout:fixed;">
+          <thead id="upiCheckHead"></thead>
+          <tbody id="upiCheckBody"></tbody>
         </table>
       </div>
     </div>
@@ -2244,6 +2295,126 @@
        pg_cron เรียก Edge Function 'line-notify' วันละ 2 รอบ (8 โมงเช้า / 5 โมงเย็น เวลาไทย)
        → สรุปงานที่ยังไม่กดเสร็จ และถึงกำหนดแล้ว → ส่งเป็นข้อความเดียวเข้ากลุ่ม
        ตั้งค่า: supabase/functions/line-notify/index.ts + setup_line_cron.sql */
+
+    // เมนูรวมของ UPI — popup เล็กเด้งใต้ปุ่ม (ชิดขอบจอแล้วเลื่อนเข้ามาให้เอง)
+    function openUpiMenu(e){
+      const menu=document.getElementById('upiMenu');
+      const r=(e && e.currentTarget) ? e.currentTarget.getBoundingClientRect() : {left:20,bottom:60};
+      menu.style.display='block';
+      const w=menu.offsetWidth, h=menu.offsetHeight;
+      let x=r.left, y=r.bottom+6;
+      if(x+w > window.innerWidth-8)  x = window.innerWidth-w-8;
+      if(y+h > window.innerHeight-8) y = Math.max(8, r.top-h-6);   // ล่างไม่พอ → เด้งขึ้นบนแทน
+      menu.style.left=x+'px'; menu.style.top=y+'px';
+    }
+    function closeUpiMenu(){ document.getElementById('upiMenu').style.display='none'; }
+    // คลิกที่อื่น/เลื่อนจอ = ปิดเมนู (ไม่นับคลิกที่ตัวปุ่มกับในเมนูเอง)
+    document.addEventListener('click', e=>{
+      if(e.target.closest('#upiMenu') || e.target.closest('[data-upimenu]')) return;
+      closeUpiMenu();
+    });
+    window.addEventListener('scroll', closeUpiMenu, true);
+
+    /* ===== เช็ค UPI ↔ หัวบ้าน — อ่านจากช่อง UPI ในตารางหัวบ้านโดยตรง ===== */
+    let badUpiSet = new Set();   // UPI ที่อยู่ในรายการเสีย (ตัวพิมพ์เล็ก)
+    async function openUpiCheckModal(){
+      document.getElementById('upiCheckSearch').value='';
+      document.getElementById('upiCheckDupOnly').checked=false;
+      upiCheckDetail=null;   // เปิดใหม่ = เริ่มที่รายการ UPI เสมอ
+      document.getElementById('upiCheckModalBackdrop').style.display='block';
+      renderUpiCheck();                     // วาดจากข้อมูลในเครื่องก่อน ไม่ต้องรอเน็ต
+      const { data } = await sb.from('bad_upi').select('upi');
+      badUpiSet = new Set((data||[]).map(r=>String(r.upi||'').trim().toLowerCase()).filter(Boolean));
+      renderUpiCheck();                     // ได้รายการเสียแล้วค่อยวาดซ้ำพร้อมป้าย
+    }
+    function closeUpiCheckModal(){ document.getElementById('upiCheckModalBackdrop').style.display='none'; }
+    let upiCheckDetail = null;   // null = รายการ UPI / มีค่า = เจาะดูว่า UPI นี้อยู่หัวบ้านไหนบ้าง
+    function upiCheckOpen(key){ upiCheckDetail=key; renderUpiCheck(); }
+    function upiCheckBack(){ upiCheckDetail=null; renderUpiCheck(); }
+
+    function upiTag(text,bg,color,border){
+      const s=document.createElement('span');
+      s.textContent=text;
+      s.style.cssText='display:inline-block;margin-right:4px;padding:2px 9px;border-radius:11px;font-size:11px;font-weight:800;background:'+bg+';color:'+color+';border:1px solid '+border+';';
+      return s;
+    }
+    function setUpiCheckHead(cols){
+      const thead=document.getElementById('upiCheckHead'); thead.innerHTML='';
+      const tr=document.createElement('tr');
+      cols.forEach(c=>{ const th=document.createElement('th'); th.textContent=c[0]; th.style.width=c[1]; tr.appendChild(th); });
+      thead.appendChild(tr);
+    }
+    function renderUpiCheck(){
+      const tbody=document.getElementById('upiCheckBody'); tbody.innerHTML='';
+      const kw=document.getElementById('upiCheckSearch').value.trim().toLowerCase();
+      const dupOnly=document.getElementById('upiCheckDupOnly').checked;
+
+      // จัดกลุ่มตาม UPI — 1 กลุ่ม = 1 UPI (เก็บทุกหัวบ้านที่ใช้ตัวนี้)
+      const map=new Map();
+      accountsRows.forEach(r=>{
+        const raw=String(r.upi||'').trim(); if(!raw) return;
+        const k=raw.toLowerCase();
+        if(!map.has(k)) map.set(k, { upi:raw, rows:[] });
+        map.get(k).rows.push(r);
+      });
+
+      const detail = upiCheckDetail!=null ? map.get(upiCheckDetail) : null;
+      if(upiCheckDetail!=null && !detail) upiCheckDetail=null;   // UPI นั้นถูกลบไปแล้ว → กลับหน้ารายการ
+
+      document.getElementById('upiCheckFilterBar').style.display = detail ? 'none' : 'block';
+      document.getElementById('upiCheckBackBar').style.display   = detail ? 'block' : 'none';
+
+      // ===== หน้าเจาะดู: UPI ตัวเดียว อยู่ที่หัวบ้านไหนบ้าง =====
+      if(detail){
+        document.getElementById('upiCheckDetailLabel').textContent =
+          detail.upi+' — ใส่ไว้ '+detail.rows.length+' หัวบ้าน';
+        setUpiCheckHead([['อีเมลหัวบ้าน','40%'],['คนที่ใส่','18%'],['วันที่ใส่','18%'],['หมดอายุหัวบ้าน','24%']]);
+        document.getElementById('upiCheckCount').textContent=detail.rows.length;
+        detail.rows.forEach(r=>{
+          const tr=document.createElement('tr');
+          [r.email, r.upi_by, r.upi_at].forEach(v=>{
+            const td=document.createElement('td'); td.textContent=v||'-'; tr.appendChild(td);
+          });
+          const tdExp=document.createElement('td');
+          tdExp.textContent=displayDateBE(r.expire_date||'');
+          const c=dateColor(r.expire_date,false);
+          if(c){ tdExp.style.backgroundColor=c; tdExp.classList.add('cellcolor'); }
+          tr.appendChild(tdExp); tbody.appendChild(tr);
+        });
+        return;
+      }
+
+      // ===== หน้ารายการ: 1 บรรทัด = 1 UPI =====
+      setUpiCheckHead([['UPI','46%'],['คนที่ใส่','16%'],['วันที่ใส่','16%'],['จำนวนอีเมล (กดดู)','22%']]);
+      let groups=[...map.values()];
+      if(kw) groups=groups.filter(g=>(g.upi+' '+g.rows.map(r=>r.email||'').join(' ')).toLowerCase().includes(kw));
+      if(dupOnly) groups=groups.filter(g=>g.rows.length>1 || badUpiSet.has(g.upi.toLowerCase()));
+      groups.sort((a,b)=>a.upi.localeCompare(b.upi));
+
+      document.getElementById('upiCheckCount').textContent=groups.length;
+      if(groups.length===0){
+        const tr=document.createElement('tr'); const td=document.createElement('td');
+        td.colSpan=4; td.style.color='#888';
+        td.textContent = kw ? 'ไม่พบ UPI หรืออีเมลที่ค้นหา' : 'ยังไม่มีหัวบ้านที่ใส่ UPI ไว้';
+        tr.appendChild(td); tbody.appendChild(tr); return;
+      }
+      groups.forEach(g=>{
+        const k=g.upi.toLowerCase(), n=g.rows.length, first=g.rows[0];
+        const tr=document.createElement('tr');
+        [g.upi, first.upi_by, first.upi_at].forEach(v=>{
+          const td=document.createElement('td'); td.textContent=v||'-'; tr.appendChild(td);
+        });
+        // จำนวนอีเมลที่ผูกกับ UPI ตัวนี้ — มากกว่า 1 = แดง (ผิดปกติ), 1 = เขียว
+        const tdSt=document.createElement('td');
+        tdSt.style.cursor='pointer'; tdSt.title='กดเพื่อดูว่าใส่ไว้ที่อีเมลไหนบ้าง';
+        tdSt.onclick=()=>upiCheckOpen(k);
+        tdSt.appendChild(n>1
+          ? upiTag(n+' อีเมล','#ffe3e3','#c92a2a','#ff8787')
+          : upiTag('1 อีเมล','#d8f3df','#2f9e44','#69db7c'));
+        if(badUpiSet.has(k)) tdSt.appendChild(upiTag('เสีย','#fff3bf','#5c4400','#ffe066'));
+        tr.appendChild(tdSt); tbody.appendChild(tr);
+      });
+    }
 
     /* ===== คลัง UPI (ตาราง upi_stock) — แอดมินเติม / ทุกคนกดเบิก =====
        ครั้งแรกต้องรัน SQL ในไฟล์ add_upi_stock_table.sql */
