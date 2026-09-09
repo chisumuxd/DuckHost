@@ -1759,8 +1759,7 @@
           payload[k]=nv;
           preview.push('Use '+(i+1)+': '+String(row[k]).trim()+'  →  '+nv);
           const p = parseUseValue(nv);
-          msgs.push({ slot:i+1, name:p.name, date:p.date,
-            text:'ชดเชยวันใช้งานหลุดพรีเมี่ยมจำนวน '+Math.abs(days)+' วัน\nแอดมินปรับวันหมดอายุเป็น '+p.date+' นะครับ 🙏🧡' });
+          msgs.push({ slot:i+1, name:p.name, date:p.date });
         }
       });
       if(!preview.length){
@@ -1789,43 +1788,8 @@
       }
       if(!refreshRowDom(newRow)) applySearch();
       updateSummary();
-      setStatus('ชดเชย '+days+' วัน ให้ '+preview.length+' ช่อง ของ '+(row.email||('ID '+row.id))+' แล้ว');
-      showCompensateMessages(days, msgs);
-    }
-
-    // หลังบันทึก = เด้งข้อความสำเร็จรูปให้ก็อปส่งลูกค้า (ช่องละ 1 ชุด เพราะวันหมดอายุคนละวัน)
-    function showCompensateMessages(days, items){
-      if(!items.length) return;
-      let html='<div style="text-align:left;">';
-      items.forEach((it,i)=>{
-        html += '<div style="margin-bottom:14px;">'
-          + '<div style="font-size:12px;font-weight:800;color:#2f6b3a;margin-bottom:4px;">Use '+it.slot+(it.name ? ' — '+escapeHtml(it.name) : '')+'</div>'
-          + '<div style="background:#f1faf4;border:1px solid #c3ebcf;border-radius:10px;padding:12px 14px;'
-          +      'font-size:14px;color:#2b3a2e;white-space:pre-line;line-height:1.6;">'+escapeHtml(it.text)+'</div>'
-          + '<button class="btn-yellow comp-copy" data-i="'+i+'" style="margin-top:6px;width:100%;padding:8px;">📋 คัดลอก</button>'
-          + '</div>';
-      });
-      html += '</div>';
-      document.getElementById('popupIcon').className='popup-icon success';
-      document.getElementById('popupIcon').textContent='✓';
-      document.getElementById('popupTitle').textContent='ชดเชย '+Math.abs(days)+' วันแล้ว';
-      document.getElementById('popupMsg').innerHTML = html;
-      document.getElementById('popupMsg').style.whiteSpace='normal';
-      popupCb = null;
-      document.getElementById('popupBackdrop').style.display='block';
-      document.querySelectorAll('#popupMsg .comp-copy').forEach(btn=>{
-        btn.onclick = async ()=>{
-          const text = items[+btn.dataset.i].text;
-          try { await navigator.clipboard.writeText(text); }
-          catch(e){
-            const ta=document.createElement('textarea'); ta.value=text;
-            document.body.appendChild(ta); ta.select();
-            document.execCommand('copy'); document.body.removeChild(ta);
-          }
-          const old=btn.textContent; btn.textContent='✓ คัดลอกแล้ว';
-          setTimeout(()=>{ btn.textContent=old; }, 1200);
-        };
-      });
+      setStatus('ชดเชย '+days+' วัน ให้ '+preview.length+' ช่อง ของ '+(row.email||('ID '+row.id))
+        + ' แล้ว — ชุดข้อความรอกดที่ส่วนขยาย');
     }
 
     // สลับค่าช่อง Use ภายในแถวเดียวกัน (ซ้าย-ขวา เท่านั้น — ห้ามข้ามแถว)
