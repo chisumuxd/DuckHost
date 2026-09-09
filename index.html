@@ -1132,9 +1132,9 @@
     function toggleDark(){ applyDark(!document.body.classList.contains('dark')); }
     (function(){ let v=null; try{ v=localStorage.getItem('duck_dark'); }catch(e){} applyDark(v==='1'); })();
 
-    // วันที่วันนี้แบบ ว/ด/พ.ศ.2หลัก (เช่น 5/9/69) — รูปแบบเดียวกับช่องวันที่อื่นในตาราง
-    function todayBE2(){ const d=new Date();
-      return d.getDate()+'/'+(d.getMonth()+1)+'/'+String((d.getFullYear()+543)%100).padStart(2,'0'); }
+    // วันที่แบบ ว/ด/พ.ศ.2หลัก (เช่น 5/9/69) — รูปแบบเดียวกับช่องวันที่อื่นในตาราง
+    function fmtBE2Date(d){ return d.getDate()+'/'+(d.getMonth()+1)+'/'+String((d.getFullYear()+543)%100).padStart(2,'0'); }
+    function todayBE2(){ return fmtBE2Date(new Date()); }
     // ใส่/แก้ช่อง UPI = ระบบประทับ "คนที่ใส่" + "วันที่ใส่" ให้เอง (ล้าง UPI = ล้างทั้งสองช่อง)
     function stampUpi(payload){
       if(!('upi' in payload)) return payload;
@@ -1478,6 +1478,10 @@
       if(editable){
         const b=document.createElement('button'); b.className='btn-yellow'; b.textContent='แก้ไข';
         b.dataset.edit='1'; tdAct.appendChild(b);
+        const c=document.createElement('button'); c.className='btn-blue'; c.textContent='+วัน';
+        c.dataset.comp='1'; c.title='ชดเชยวัน — บวกวันให้ทุกช่อง Use 1-5 ของแถวนี้';
+        c.style.cssText='padding:5px 10px;font-size:12px;margin-left:4px;box-shadow:0 3px 0 #1971c2;';
+        tdAct.appendChild(c);
       } else { tdAct.textContent='ดูเท่านั้น'; }
       tr.appendChild(tdAct);
       return tr;
@@ -1615,11 +1619,11 @@
         if(f.width){ th.style.width=f.width+'px'; th.style.minWidth=f.width+'px'; th.style.maxWidth=f.width+'px'; }
         hr.appendChild(th);
       });
-      const thAct=document.createElement('th'); thAct.textContent='จัดการ'; thAct.style.width='80px'; thAct.style.minWidth='80px'; thAct.style.maxWidth='80px'; hr.appendChild(thAct);
+      const thAct=document.createElement('th'); thAct.textContent='จัดการ'; thAct.style.width='140px'; thAct.style.minWidth='140px'; thAct.style.maxWidth='140px'; hr.appendChild(thAct);
       thead.appendChild(hr);
 
       // ล็อกความกว้างตารางให้เท่าผลรวมคอลัมน์ — กันคอลัมน์ขยับตอน virtual scroll
-      const totalW = 50 + 80 + DISPLAY_FIELDS.reduce((s,f)=>s+(f.width||120),0);
+      const totalW = 50 + 140 + DISPLAY_FIELDS.reduce((s,f)=>s+(f.width||120),0);
       const tableEl = thead.parentElement;
       tableEl.style.width = totalW + 'px';
       tableEl.style.minWidth = totalW + 'px';
@@ -1690,6 +1694,8 @@
       tbody.addEventListener('click', e=>{
         const fx=e.target.closest('[data-fix]');
         if(fx){ const tr=fx.closest('tr'); if(tr&&tr._row) toggleFixStatus(tr._row); return; }
+        const cbtn=e.target.closest('button[data-comp]');
+        if(cbtn){ const tr=cbtn.closest('tr'); if(tr&&tr._row) compensateDays(tr._row); return; }
         const btn=e.target.closest('button[data-edit]');
         if(btn){ const tr=btn.closest('tr'); if(tr&&tr._row) openEditModal(tr._row); return; }
         const tr=e.target.closest('tr');
@@ -1725,6 +1731,101 @@
         swapUseCells(src.id, src.key, r.key);
       });
       tbody.addEventListener('dragend', ()=>{ dragSrc=null; clearHint(); });
+    }
+
+    // ===== ชดเชยวัน — บวก/ลบวันให้ทุกช่อง Use 1-5 ของแถวเดียว =====
+    // คืนค่าใหม่ของช่อง Use (คงร้าน+ชื่อเดิม เปลี่ยนแค่วันที่) หรือ null ถ้าช่องนั้นไม่มีวันที่
+    function addDaysToUseValue(value, days){
+      const p = parseUseValue(value);
+      if(!p.date) return null;
+      const d = extractDate(p.date);
+      if(!d) return null;
+      d.setDate(d.getDate() + days);
+      return joinUseValue(p.store, p.name, fmtBE2Date(d));
+    }
+    async function compensateDays(row){
+      if(!canEdit()){ showPopup('ไม่มีสิทธิ์','บัญชีนี้ดูข้อมูลเท่านั้น','error'); return; }
+      const input = prompt('ชดเชยวันให้ช่อง Use 1-5 ของ\n'+(row.email||('ID '+row.id))+'\n\nใส่จำนวนวัน (ใส่ค่าติดลบ = ลดวัน)', '');
+      if(input===null) return;
+      const days = parseInt(String(input).trim(), 10);
+      if(!Number.isFinite(days) || days===0){
+        showPopup('จำนวนวันไม่ถูกต้อง','กรุณาใส่เป็นตัวเลข เช่น 3 หรือ -2','error'); return;
+      }
+
+      const payload={}, preview=[], msgs=[];
+      USE_KEYS.forEach((k,i)=>{
+        const nv = addDaysToUseValue(row[k], days);
+        if(nv!==null && nv!==String(row[k]||'').trim()){
+          payload[k]=nv;
+          preview.push('Use '+(i+1)+': '+String(row[k]).trim()+'  →  '+nv);
+          const p = parseUseValue(nv);
+          msgs.push({ slot:i+1, name:p.name, date:p.date,
+            text:'ชดเชยวันใช้งานหลุดพรีเมี่ยมจำนวน '+Math.abs(days)+' วัน\nแอดมินปรับวันหมดอายุเป็น '+p.date+' นะครับ 🙏🧡' });
+        }
+      });
+      if(!preview.length){
+        showPopup('ไม่มีช่องให้ชดเชย','ช่อง Use 1-5 ของหัวบ้านนี้ไม่มีวันที่ให้บวก\n(ช่องว่าง/เตะแล้ว จะถูกข้าม)','error'); return;
+      }
+      if(!confirm((days>0?'บวก ':'ลด ')+Math.abs(days)+' วัน ให้ '+preview.length+' ช่อง\n\n'+preview.join('\n'))) return;
+
+      const oldRow = accountsRows.find(r=>r.id===row.id);
+      const { error } = await sb.from('accounts').update(payload).eq('id', row.id);
+      if(error){ showPopup('ชดเชยวันไม่สำเร็จ', error.message, 'error'); return; }
+      markSaved(row.id);
+      const newRow = Object.assign({}, oldRow||row, payload);
+      if(oldRow) await writeAudit('UPDATE', row.id, oldRow, newRow);
+      const i = accountsRows.findIndex(r=>r.id===row.id);
+      if(i>=0) accountsRows[i]=newRow;
+      syncVRow(row.id);
+      saveCache(getMaxUpdatedAt());
+      // บันทึกรายการชดเชยไว้ให้ส่วนขยาย (extension) ขึ้นปุ่มชุดข้อความตรงช่องนั้น
+      // เฉพาะตอนบวกวันจริง (ค่าติดลบ = แก้วันย้อนหลัง ไม่ใช่การชดเชย)
+      if(days>0){
+        const { error:cErr } = await sb.from('compensations').insert(msgs.map(m=>({
+          account_id: row.id, use_key: USE_KEYS[m.slot-1], days: days,
+          new_date: m.date, tenant: m.name||'', created_by: currentUser.username
+        })));
+        if(cErr) setStatus('ชดเชยวันสำเร็จ แต่บันทึกรายการให้ส่วนขยายไม่สำเร็จ: '+cErr.message);
+      }
+      if(!refreshRowDom(newRow)) applySearch();
+      updateSummary();
+      setStatus('ชดเชย '+days+' วัน ให้ '+preview.length+' ช่อง ของ '+(row.email||('ID '+row.id))+' แล้ว');
+      showCompensateMessages(days, msgs);
+    }
+
+    // หลังบันทึก = เด้งข้อความสำเร็จรูปให้ก็อปส่งลูกค้า (ช่องละ 1 ชุด เพราะวันหมดอายุคนละวัน)
+    function showCompensateMessages(days, items){
+      if(!items.length) return;
+      let html='<div style="text-align:left;">';
+      items.forEach((it,i)=>{
+        html += '<div style="margin-bottom:14px;">'
+          + '<div style="font-size:12px;font-weight:800;color:#2f6b3a;margin-bottom:4px;">Use '+it.slot+(it.name ? ' — '+escapeHtml(it.name) : '')+'</div>'
+          + '<div style="background:#f1faf4;border:1px solid #c3ebcf;border-radius:10px;padding:12px 14px;'
+          +      'font-size:14px;color:#2b3a2e;white-space:pre-line;line-height:1.6;">'+escapeHtml(it.text)+'</div>'
+          + '<button class="btn-yellow comp-copy" data-i="'+i+'" style="margin-top:6px;width:100%;padding:8px;">📋 คัดลอก</button>'
+          + '</div>';
+      });
+      html += '</div>';
+      document.getElementById('popupIcon').className='popup-icon success';
+      document.getElementById('popupIcon').textContent='✓';
+      document.getElementById('popupTitle').textContent='ชดเชย '+Math.abs(days)+' วันแล้ว';
+      document.getElementById('popupMsg').innerHTML = html;
+      document.getElementById('popupMsg').style.whiteSpace='normal';
+      popupCb = null;
+      document.getElementById('popupBackdrop').style.display='block';
+      document.querySelectorAll('#popupMsg .comp-copy').forEach(btn=>{
+        btn.onclick = async ()=>{
+          const text = items[+btn.dataset.i].text;
+          try { await navigator.clipboard.writeText(text); }
+          catch(e){
+            const ta=document.createElement('textarea'); ta.value=text;
+            document.body.appendChild(ta); ta.select();
+            document.execCommand('copy'); document.body.removeChild(ta);
+          }
+          const old=btn.textContent; btn.textContent='✓ คัดลอกแล้ว';
+          setTimeout(()=>{ btn.textContent=old; }, 1200);
+        };
+      });
     }
 
     // สลับค่าช่อง Use ภายในแถวเดียวกัน (ซ้าย-ขวา เท่านั้น — ห้ามข้ามแถว)
