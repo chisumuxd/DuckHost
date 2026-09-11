@@ -594,7 +594,7 @@
   </div>
 
   <div id="upiMenu">
-    <div class="upi-menu-item" onclick="closeUpiMenu();runAutoRenew()">🔄 ต่ออายุอัตโนมัติ (มี UPI)</div>
+    <div class="upi-menu-item" onclick="closeUpiMenu();runAutoRenew()" title="ระบบต่อให้เองทุกวัน 9 โมงเช้าอยู่แล้ว — กดนี่คือสั่งให้ทำทันที">🔄 ต่ออายุอัตโนมัติ (สั่งทำเลย)</div>
     <div class="upi-menu-item" onclick="closeUpiMenu();openUpiStockModal()">🎁 เบิก UPI จากคลัง</div>
     <div class="upi-menu-item" onclick="closeUpiMenu();openUpiCheckModal()">🔎 เช็ค UPI ↔ หัวบ้าน</div>
     <div class="upi-menu-item" onclick="closeUpiMenu();openBadUpiModal()">❌ รายการ UPI เสีย</div>
@@ -2364,7 +2364,11 @@
 
     /* ===== ต่ออายุอัตโนมัติ =====
        เงื่อนไข 3 ข้อ ต้องครบถึงจะต่อให้: ถึง/เลยวันหมดอายุแล้ว + ช่อง UPI มีข้อมูล + เครดิตพอ (>= 389)
-       ต่อ = เลื่อนวันหมดอายุไปอีก 1 เดือน (นับจากวันหมดอายุเดิม = รอบบิลไม่เพี้ยน) แล้วหักเครดิต 389 */
+       ต่อ = เลื่อนวันหมดอายุไปอีก 1 เดือน (นับจากวันหมดอายุเดิม = รอบบิลไม่เพี้ยน) แล้วหักเครดิต 389
+
+       ตัวที่ทำงานจริงอยู่ที่ Supabase (ฟังก์ชัน auto_renew_upi + cron ทุกวัน 9 โมงเช้า)
+       → ทำงานเองแม้ไม่มีใครเปิดเว็บ และเปิดหลายเครื่องพร้อมกันก็ไม่หักเครดิตซ้ำ
+       ปุ่มในเมนูแค่เรียกฟังก์ชันตัวเดียวกันให้ทำทันที (ไม่ต้องรอถึง 9 โมง) — ดู setup_auto_renew.sql */
     function addMonthsKeepDay(d, n){
       const day=d.getDate();
       const nd=new Date(d.getFullYear(), d.getMonth()+n, 1);
@@ -2399,30 +2403,18 @@
         + 'หักเครดิตรวม '+totalCredit.toLocaleString('en-US')+' ('+EXPIRE_CREDIT_DEDUCT+' ต่อหัวบ้าน)\n\n'
         + preview + (list.length>10 ? '\n… และอีก '+(list.length-10)+' รายการ' : ''))) return;
 
-      let done=0, failed=0;
-      for(const row of list){
-        const nd = addMonthsKeepDay(extractDate(row.expire_date), 1);
-        const payload = {
-          expire_date: fmtBE2Date(nd),
-          credit: (parseCredit(row.credit) - EXPIRE_CREDIT_DEDUCT).toLocaleString('en-US')
-        };
-        setStatus('กำลังต่ออายุ... '+(done+failed+1)+'/'+list.length);
-        const { error } = await sb.from('accounts').update(payload).eq('id', row.id);
-        if(error){ failed++; continue; }
-        markSaved(row.id);
-        const newRow = Object.assign({}, row, payload);
-        await writeAudit('UPDATE', row.id, row, newRow, 'System');   // ระบบต่อให้ = ลงชื่อ System
-        const i = accountsRows.findIndex(r=>r.id===row.id);
-        if(i>=0) accountsRows[i]=newRow;
-        syncVRow(row.id);
-        done++;
+      // ให้ฝั่งเซิร์ฟเวอร์ทำ (ตรรกะเดียวกับที่ cron ใช้) แล้วค่อยดึงข้อมูลใหม่มาแสดง
+      setStatus('กำลังต่ออายุ...');
+      const { data, error } = await sb.rpc('auto_renew_upi');
+      if(error){
+        showPopup('ต่ออายุไม่สำเร็จ', error.message+'\n(ถ้ายังไม่ได้ติดตั้ง ให้รัน setup_auto_renew.sql ก่อน)','error');
+        return;
       }
-      saveCache(getMaxUpdatedAt());
-      applySearch(); updateSummary();
-      showPopup(failed ? 'ต่ออายุเสร็จ (มีบางรายการพลาด)' : 'ต่ออายุสำเร็จ',
-        'ต่ออายุแล้ว '+done+' หัวบ้าน (+1 เดือน)\nหักเครดิตรวม '+(EXPIRE_CREDIT_DEDUCT*done).toLocaleString('en-US')
-        + (failed ? '\nไม่สำเร็จ '+failed+' รายการ — ลองกดใหม่อีกครั้ง' : ''),
-        failed ? 'error' : 'success');
+      const done = (data && data.renewed) || 0;
+      await deltaSync(getMaxUpdatedAt(), { detectDeletes:false });   // ดึงแถวที่เซิร์ฟเวอร์เพิ่งแก้
+      showPopup('ต่ออายุสำเร็จ',
+        'ต่ออายุแล้ว '+done+' หัวบ้าน (+1 เดือน)\nหักเครดิตรวม '+(EXPIRE_CREDIT_DEDUCT*done).toLocaleString('en-US'),
+        'success');
     }
 
     // เมนูรวมของ UPI — popup เล็กเด้งใต้ปุ่ม (ชิดขอบจอแล้วเลื่อนเข้ามาให้เอง)
