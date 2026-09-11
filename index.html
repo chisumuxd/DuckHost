@@ -594,6 +594,7 @@
   </div>
 
   <div id="upiMenu">
+    <div class="upi-menu-item" onclick="closeUpiMenu();runAutoRenew()">🔄 ต่ออายุอัตโนมัติ (มี UPI)</div>
     <div class="upi-menu-item" onclick="closeUpiMenu();openUpiStockModal()">🎁 เบิก UPI จากคลัง</div>
     <div class="upi-menu-item" onclick="closeUpiMenu();openUpiCheckModal()">🔎 เช็ค UPI ↔ หัวบ้าน</div>
     <div class="upi-menu-item" onclick="closeUpiMenu();openBadUpiModal()">❌ รายการ UPI เสีย</div>
@@ -2360,6 +2361,69 @@
        pg_cron เรียก Edge Function 'line-notify' วันละ 2 รอบ (8 โมงเช้า / 5 โมงเย็น เวลาไทย)
        → สรุปงานที่ยังไม่กดเสร็จ และถึงกำหนดแล้ว → ส่งเป็นข้อความเดียวเข้ากลุ่ม
        ตั้งค่า: supabase/functions/line-notify/index.ts + setup_line_cron.sql */
+
+    /* ===== ต่ออายุอัตโนมัติ =====
+       เงื่อนไข 3 ข้อ ต้องครบถึงจะต่อให้: ถึง/เลยวันหมดอายุแล้ว + ช่อง UPI มีข้อมูล + เครดิตพอ (>= 389)
+       ต่อ = เลื่อนวันหมดอายุไปอีก 1 เดือน (นับจากวันหมดอายุเดิม = รอบบิลไม่เพี้ยน) แล้วหักเครดิต 389 */
+    function addMonthsKeepDay(d, n){
+      const day=d.getDate();
+      const nd=new Date(d.getFullYear(), d.getMonth()+n, 1);
+      const last=new Date(nd.getFullYear(), nd.getMonth()+1, 0).getDate();
+      nd.setDate(Math.min(day, last));   // 31 ม.ค. + 1 เดือน = 28/29 ก.พ.
+      return nd;
+    }
+    function autoRenewCandidates(){
+      const now=new Date(); const today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+      return accountsRows.filter(r=>{
+        const d=extractDate(r.expire_date);
+        if(!d || d.getTime() > today.getTime()) return false;              // ยังไม่ถึงวันหมดอายุ
+        if(String(r.upi||'').trim()==='') return false;                    // ไม่มี UPI
+        const c=parseCredit(r.credit);
+        return Number.isFinite(c) && c >= EXPIRE_CREDIT_DEDUCT;            // เครดิตไม่พอ
+      });
+    }
+    async function runAutoRenew(){
+      if(!canEdit()){ showPopup('ไม่มีสิทธิ์','บัญชีนี้ดูข้อมูลเท่านั้น','error'); return; }
+      const list = autoRenewCandidates();
+      if(!list.length){
+        showPopup('ไม่มีรายการให้ต่ออายุ',
+          'ต้องครบ 3 เงื่อนไข: ถึงวันหมดอายุแล้ว + มี UPI + เครดิตพอ ('+EXPIRE_CREDIT_DEDUCT+' ขึ้นไป)','error');
+        return;
+      }
+      const totalCredit = EXPIRE_CREDIT_DEDUCT*list.length;
+      const preview = list.slice(0,10).map(r=>{
+        const nd = addMonthsKeepDay(extractDate(r.expire_date), 1);
+        return '• '+(r.email||('ID '+r.id))+': '+displayDateBE(r.expire_date)+' → '+fmtBE2Date(nd);
+      }).join('\n');
+      if(!confirm('ต่ออายุอัตโนมัติ '+list.length+' หัวบ้าน (+1 เดือน)\n'
+        + 'หักเครดิตรวม '+totalCredit.toLocaleString('en-US')+' ('+EXPIRE_CREDIT_DEDUCT+' ต่อหัวบ้าน)\n\n'
+        + preview + (list.length>10 ? '\n… และอีก '+(list.length-10)+' รายการ' : ''))) return;
+
+      let done=0, failed=0;
+      for(const row of list){
+        const nd = addMonthsKeepDay(extractDate(row.expire_date), 1);
+        const payload = {
+          expire_date: fmtBE2Date(nd),
+          credit: (parseCredit(row.credit) - EXPIRE_CREDIT_DEDUCT).toLocaleString('en-US')
+        };
+        setStatus('กำลังต่ออายุ... '+(done+failed+1)+'/'+list.length);
+        const { error } = await sb.from('accounts').update(payload).eq('id', row.id);
+        if(error){ failed++; continue; }
+        markSaved(row.id);
+        const newRow = Object.assign({}, row, payload);
+        await writeAudit('UPDATE', row.id, row, newRow, 'System');   // ระบบต่อให้ = ลงชื่อ System
+        const i = accountsRows.findIndex(r=>r.id===row.id);
+        if(i>=0) accountsRows[i]=newRow;
+        syncVRow(row.id);
+        done++;
+      }
+      saveCache(getMaxUpdatedAt());
+      applySearch(); updateSummary();
+      showPopup(failed ? 'ต่ออายุเสร็จ (มีบางรายการพลาด)' : 'ต่ออายุสำเร็จ',
+        'ต่ออายุแล้ว '+done+' หัวบ้าน (+1 เดือน)\nหักเครดิตรวม '+(EXPIRE_CREDIT_DEDUCT*done).toLocaleString('en-US')
+        + (failed ? '\nไม่สำเร็จ '+failed+' รายการ — ลองกดใหม่อีกครั้ง' : ''),
+        failed ? 'error' : 'success');
+    }
 
     // เมนูรวมของ UPI — popup เล็กเด้งใต้ปุ่ม (ชิดขอบจอแล้วเลื่อนเข้ามาให้เอง)
     function openUpiMenu(e){
