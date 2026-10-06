@@ -356,6 +356,7 @@
             <button id="auditBtn" class="btn-gray" style="display:none;" onclick="openAuditModal()">ประวัติ</button>
             <button id="addBtn" class="btn-blue" onclick="openAddModal()">+ เพิ่มข้อมูล</button>
             <button id="darkToggle" class="btn-gray" onclick="toggleDark()" title="สลับโหมดมืด/สว่าง">🌙</button>
+            <button class="btn-gray" onclick="exportCsv()" title="ส่งออกทุกแถวเป็นไฟล์ เปิดใน Google Sheets ได้">📊 ส่งออก Sheets</button>
             <button class="btn-gray" onclick="forceReload()" title="ล้าง cache แล้วโหลดใหม่ทั้งหมด">↻ โหลดใหม่</button>
             <button class="btn-gray" onclick="doLogout()">ออกจากระบบ</button>
           </div>
@@ -1143,6 +1144,29 @@
       payload.upi_by = has ? (currentUser.name || currentUser.username) : '';
       payload.upi_at = has ? todayBE2() : '';
       return payload;
+    }
+
+    // ===== ส่งออกเป็นไฟล์ CSV (Google Sheets เปิดได้ตรงๆ) =====
+    // ponytail: ใช้ CSV แทนการต่อ Google Sheets API — ไม่ต้องตั้ง OAuth/คีย์อะไรเลย
+    //   เพดาน: ต้องอัปโหลดเข้า Drive เองครั้งนึง ถ้าอยากให้เขียนเข้าชีตอัตโนมัติต้องทำ OAuth เพิ่ม
+    function csvCell(v){
+      const s = String(v==null ? '' : v);
+      return /[",\n\r]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+    }
+    function exportCsv(){
+      const cols = DISPLAY_FIELDS.filter(f=>f.key!=='__fix');   // __fix ไม่ใช่คอลัมน์ใน DB
+      const rows = [['ลำดับ', ...cols.map(f=>f.header)]];
+      accountsRows.forEach((row,i)=>{
+        rows.push([i+1, ...cols.map(f=> f.key==='status' ? effectiveStatus(row) : (row[f.key]||''))]);
+      });
+      // ﻿ = BOM บอกว่าเป็น UTF-8 ไม่งั้นภาษาไทยเพี้ยนตอนเปิด
+      const blob = new Blob(['﻿'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n')], { type:'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = document.title.trim().replace(/\s+/g,'-')+'-'+todayBE2().replace(/\//g,'-')+'.csv';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      setStatus('ส่งออก '+accountsRows.length+' แถวแล้ว — ลากไฟล์เข้า Google Drive แล้วเปิดด้วย Google Sheets');
     }
 
     function canEdit(){ return currentUser && (currentUser.role==='ADMIN' || currentUser.role==='EDITOR'); }
@@ -2019,6 +2043,27 @@
       if(editingUserId){
         const newPassword=document.getElementById('uPassword').value;
         if(newPassword && newPassword.length < 6){ showUserAlert('รหัสผ่านต้องอย่างน้อย 6 ตัวอักษร (หรือเว้นว่างถ้าไม่เปลี่ยน)'); return; }
+        // เปลี่ยน "ชื่อ" = เปลี่ยนชื่อเครื่อง → ไล่แก้ช่อง "เครื่อง" ในหัวบ้านทุกแถวให้ตามด้วย
+        // (ช่องเครื่องเก็บเป็นชื่อ ถ้าไม่แก้ตาม หัวบ้านเดิมจะค้างชื่อเก่า กรอง/เบิกห้องจะหาไม่เจอ)
+        // ทำก่อนบันทึกผู้ใช้: ถ้าเปลี่ยนไม่ผ่านก็ยังไม่มีอะไรถูกแก้ / ถ้าบันทึกผู้ใช้พลาดทีหลัง กดบันทึกซ้ำได้ (ชื่อเครื่องเปลี่ยนไปแล้วจะไม่ถูกแก้ซ้ำ)
+        const oldName = String((userRows.find(u=>u.id===editingUserId)||{}).name||'').trim();
+        let renamedRows = 0;
+        if(oldName && name && oldName !== name){
+          const affected = accountsRows.filter(r=>String(r.machine||'').split(',').map(s=>s.trim()).includes(oldName)).length;
+          if(affected > 0){
+            if(!confirm('เปลี่ยนชื่อ "'+oldName+'" → "'+name+'"\n\nช่อง "เครื่อง" ของหัวบ้าน '+affected+' แถวจะถูกเปลี่ยนเป็น "'+name+'" ด้วย\nยืนยัน?')) return;
+          }
+          const saveBtnR=document.getElementById('uSaveBtn'); saveBtnR.disabled=true; saveBtnR.textContent='กำลังเปลี่ยนชื่อเครื่อง...';
+          const { data:rn, error:rnErr } = await sb.rpc('rename_machine', { p_old: oldName, p_new: name });
+          saveBtnR.disabled=false; saveBtnR.textContent='บันทึกการแก้ไข';
+          if(rnErr){
+            showUserAlert('เปลี่ยนชื่อเครื่องในหัวบ้านไม่สำเร็จ ยังไม่ได้บันทึกอะไร: '+rnErr.message
+              +'\n(ถ้าเพิ่งใช้ครั้งแรก ให้รัน add_rename_machine.sql ใน Supabase ก่อน)');
+            return;
+          }
+          renamedRows = (rn && rn.renamed) || 0;
+        }
+
         const saveBtn=document.getElementById('uSaveBtn'); saveBtn.disabled=true; saveBtn.textContent='กำลังบันทึก...';
 
         const { error }=await sb.from('user_profiles').update({ username, name, role, status, updated_by: currentUser.username, updated_at: new Date().toISOString() }).eq('id', editingUserId);
@@ -2036,7 +2081,11 @@
 
         saveBtn.disabled=false; saveBtn.textContent='บันทึกการแก้ไข';
         resetUserForm(); await loadUsers(); await loadMachineOptions();
-        showPopup('บันทึกสำเร็จ', newPassword ? 'แก้ไขผู้ใช้ + เปลี่ยนรหัสผ่านแล้ว' : 'แก้ไขผู้ใช้แล้ว','success');
+        if(renamedRows > 0) await deltaSync(getMaxUpdatedAt(), { detectDeletes:false });   // ดึงหัวบ้านที่เพิ่งเปลี่ยนชื่อเครื่อง
+        showPopup('บันทึกสำเร็จ',
+          (newPassword ? 'แก้ไขผู้ใช้ + เปลี่ยนรหัสผ่านแล้ว' : 'แก้ไขผู้ใช้แล้ว')
+          + (renamedRows > 0 ? '\nเปลี่ยนชื่อเครื่องในหัวบ้าน '+renamedRows+' แถวแล้ว' : ''),
+          'success');
       } else {
         const password=document.getElementById('uPassword').value;
         if(!password || password.length < 6){ showUserAlert('กรุณาตั้งรหัสผ่านอย่างน้อย 6 ตัวอักษร'); return; }
@@ -3184,8 +3233,12 @@ function showClaimResult(row, newValue){
   if(tname && !tname.includes('@')) tname += '@gmail.com';      // ลูกบ้านเติม @gmail.com ให้เป็นอีเมล
   const tenant = [tname, p.date].filter(Boolean).join(' ');     // อีเมลลูกค้า + วันที่
 
+  // หัวข้อหัวบ้านต่อท้ายด้วยชื่อเครื่อง เช่น "หัวบ้าน Best" (ไม่มีเครื่อง = "หัวบ้าน" เฉยๆ)
+  const machine = String(row.machine||'').trim();
+  const headLabel = 'หัวบ้าน' + (machine ? ' '+machine : '');
+
   // ข้อความชุดเดียว (นี่คือค่าที่จะถูกคัดลอก)
-  const combined = 'หัวบ้าน\n'+head+'\n\nลูกบ้าน\n'+tenant;
+  const combined = headLabel+'\n'+head+'\n\nลูกบ้าน\n'+tenant;
 
   // แสดงเป็น 2 บล็อกคุมระยะห่างเอง (ไม่ใช้บรรทัดว่างจาก \n\n ที่ทำให้ห่างเกิน)
   // ส่วนข้อความที่คัดลอกยังเป็น combined เหมือนเดิม
@@ -3194,7 +3247,7 @@ function showClaimResult(row, newValue){
     + '<div style="background:#f1faf4;border:1px solid #c3ebcf;border-radius:10px;'
     +      'padding:12px 14px;font-size:14px;color:#2b3a2e;'
     +      'word-break:break-all;line-height:1.45;">'
-    +   '<div style="font-weight:800;">หัวบ้าน</div>'
+    +   '<div style="font-weight:800;">'+escapeHtml(headLabel)+'</div>'
     +   '<div>'+escapeHtml(head)+'</div>'
     +   '<div style="font-weight:800;margin-top:9px;">ลูกบ้าน</div>'
     +   '<div>'+escapeHtml(tenant)+'</div>'
